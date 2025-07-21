@@ -1,489 +1,599 @@
-"use client";
+  "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { useState, useRef } from "react";
-import { toast } from "sonner"
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Download, Send, LockIcon, InfoIcon, CheckIcon, Mic, MicOff } from "lucide-react"
-import { InngestForGenerateValues } from "@/app/api/zod";
-import { Label } from "@/components/ui/label";
-import { api } from "@/convex/_generated/api";
-import { useQuery } from "convex/react";
-import { Doc, Id } from "@/convex/_generated/dataModel";
-import { useMutation } from "convex/react";
-
-const categories = [
-  "cut",
-  "color",
-  "hair",
-  "nail",
-  "body",
-  "other",
-];
+import { Loader2, Send, Wand2, Search, Download, Globe, Bot, MapPin } from "lucide-react";
+import { AREA_URL_MAP } from "@/lib/constants";
 
 export default function Home() {
+  // SNS生成ツール用の状態
+  const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isInterval, setIsInterval] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("日本人の主婦の30~50代の女性に利用してもらえるような商品説明を生成してください。");
-  const [selectedContent, setSelectedContent] = useState<Doc<"generate"> | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isRecordingDescription, setIsRecordingDescription] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [descriptionMediaRecorder, setDescriptionMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [generateConfig, setGenerateConfig] = useState({
-    menuName: "アッシュカラー(カット付き)",
-    category: "color",
-    targetGender: "male",
-    menuDescription: "アッシュカラーは、男性に人気のカラーです。",
-    menuPrice: "10000",
-    platform: "ec",
-    tone: "casual",
-  });
-  
-  const isSubmittingRef = useRef(false);
+  const [result, setResult] = useState("");
 
-  const generateContents = useQuery(api.generate.query.list);
+  // リスト収集ツール用の状態
+  const [selectedMainArea, setSelectedMainArea] = useState<string>("");
+  const [selectedSubArea, setSelectedSubArea] = useState<string>("");
+  const [selectedDetailArea, setSelectedDetailArea] = useState<string>("");
+  const [subAreas, setSubAreas] = useState<{name: string, url: string}[]>([]);
+  const [detailAreas, setDetailAreas] = useState<{name: string, url: string}[]>([]);
+  const [isLoadingSubAreas, setIsLoadingSubAreas] = useState(false);
+  const [isLoadingDetailAreas, setIsLoadingDetailAreas] = useState(false);
+  const [isCollecting, setIsCollecting] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [collectedList, setCollectedList] = useState<any[]>([]);
 
-  const checkMutation = useMutation(api.generate.mutation.checkByRunId);
+  // ファイル管理用の状態
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [files, setFiles] = useState<any[]>([]);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
 
-  const handleReset = () => {
-    setGenerateConfig({
-      platform: "ec",
-      tone: "casual",
-      menuName: "",
-      category: "color",
-      targetGender: "male",
-      menuDescription: "",
-      menuPrice: "",
-    });
-    setQuery("");
-  }
+  // RAGチャットボット用の状態
+  const [isIframeLoaded, setIsIframeLoaded] = useState(false);
+
   const handleGenerate = async () => {
-    if (isSubmittingRef.current) {
-      return;
-    }
+    if (!prompt.trim()) return;
     
-    try{
-      if (generateConfig.menuName === "" || generateConfig.category === "") {
-        toast.error("Please fill in all fields");
-        return;
-      }
-      if (isNaN(Number(generateConfig.menuPrice))) {
-        toast.error("Price must be a number");
-        return; 
-      }
-      isSubmittingRef.current = true;
-      setIsInterval(true);
-      setIsGenerating(true);
-      await submitInngestForGenerate({ ...generateConfig, query: query });
-      toast.success("Event sent!");
-    } catch (error) {
-      console.error(error);
-      toast.error("Error sending event!" + error);
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      const data = await response.json();
+      setResult(data.result || "生成に失敗しました");
+    } catch {
+      setResult("エラーが発生しました");
     } finally {
-      setTimeout(() => {
-        setIsInterval(false);
-        isSubmittingRef.current = false;
-      }, 30000); // 20秒後に解除
       setIsGenerating(false);
     }
   };
 
-  const handleExport = async () => {
-    try {
-      setIsExporting(true);
-      
-      if (!generateContents || generateContents.length === 0) {
-        toast.error("No data to export!");
-        return;
-      }
-
-      // CSVヘッダー
-      const headers = [
-        "ID",
-        "作成日時",
-        "生成時間(秒)",
-        "プロンプト",
-        "生成結果",
-        "確認済み",
-        "実行ID"
-      ];
-
-      // CSVデータ作成
-      const csvData = generateContents.map(content => [
-        content._id.toString(),
-        new Date(content._creationTime).toLocaleString('ja-JP'),
-        content.time + "sec",
-        `"${content.query.replace(/"/g, '""')}"`, // ダブルクォートをエスケープ
-        `"${content.result.replace(/"/g, '""')}"`, // ダブルクォートをエスケープ
-        content.checked ? "はい" : "いいえ",
-        content.eventId || ""
-      ]);
-
-      // ヘッダーとデータを結合
-      const csvContent = [headers, ...csvData]
-        .map(row => row.join(","))
-        .join("\n");
-
-      // BOM付きでUTF-8エンコーディング
-      const bom = "\uFEFF";
-      const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
-      
-      // ダウンロード
-      const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", `generate-contents-${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = "hidden";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      toast.success("CSV exported successfully!");
-    } catch (error) {
-      console.error(error);
-      toast.error("Error exporting! " + error);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleViewMore = (content: Doc<"generate">) => {
-    setSelectedContent(content);
-    setIsOpen(true);
-  };
-
-  const handleCheck = async (id: Id<"generate">) => {
-    await checkMutation({ id });
-  };
-
-  const startRecording = async () => {
-    try {
-      toast.info('音声入力を開始します');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const audioChunks: Blob[] = [];
-
-      recorder.ondataavailable = (event) => {
-        audioChunks.push(event.data);
-      };
-
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        await transcribeAudio(audioBlob, false);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      recorder.start();
-      setMediaRecorder(recorder);
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      toast.error('マイクへのアクセスが拒否されました');
-    }
-  };
-
-  const stopRecording = () => {
-    toast.success('音声入力を停止しました');
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      setMediaRecorder(null);
-    }
-  };
-
-  const transcribeAudio = async (audioBlob: Blob, isDescription = false) => {
-    try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.wav');
-
-      const response = await fetch('/api/whisper', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
+  const handleMainAreaChange = async (areaName: string) => {
+    setSelectedMainArea(areaName);
+    setSelectedSubArea("");
+    setSelectedDetailArea("");
+    setSubAreas([]);
+    setDetailAreas([]);
+    
+    if (areaName) {
+      setIsLoadingSubAreas(true);
+      try {
+        const response = await fetch('/api/subareas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ areaUrl: AREA_URL_MAP[areaName] })
+        });
         const data = await response.json();
-        if (isDescription) {
-          setGenerateConfig(prev => ({
-            ...prev,
-            menuDescription: prev.menuDescription + (prev.menuDescription ? ' ' : '') + data.text
-          }));
-        } else {
-          setQuery(prev => prev + (prev ? ' ' : '') + data.text);
+        if (data.success) {
+          setSubAreas(data.subAreas || []);
         }
-        toast.success('音声が正常に変換されました');
+      } catch (error) {
+        console.error('サブエリア取得エラー:', error);
+      } finally {
+        setIsLoadingSubAreas(false);
+      }
+    }
+  };
+
+  const handleSubAreaChange = async (subAreaUrl: string) => {
+    setSelectedSubArea(subAreaUrl);
+    setSelectedDetailArea("");
+    setDetailAreas([]);
+    
+    if (subAreaUrl) {
+      setIsLoadingDetailAreas(true);
+      try {
+        const response = await fetch('/api/detailareas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subAreaUrl })
+        });
+        const data = await response.json();
+        if (data.success) {
+          setDetailAreas(data.detailAreas || []);
+        }
+      } catch (error) {
+        console.error('詳細エリア取得エラー:', error);
+      } finally {
+        setIsLoadingDetailAreas(false);
+      }
+    }
+  };
+
+  const handleCollectList = async () => {
+    // エリアが選択されているかチェック
+    if (!selectedMainArea) {
+      alert('エリアを選択してください');
+      return;
+    }
+    
+    setIsCollecting(true);
+    try {
+      // 使用するURLを決定（優先順位: 詳細エリア > サブエリア > メインエリア）
+      let targetUrl = "";
+      if (selectedDetailArea) {
+        targetUrl = selectedDetailArea;
+      } else if (selectedSubArea) {
+        targetUrl = selectedSubArea;
+      } else if (selectedMainArea) {
+        targetUrl = AREA_URL_MAP[selectedMainArea];
+      }
+      
+      const response = await fetch('/api/crawler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          areaUrl: targetUrl 
+        })
+      });
+      const data = await response.json();
+      setCollectedList(data.results || []);
+    } catch (error) {
+      console.error('収集エラー:', error);
+      setCollectedList([]);
+    } finally {
+      setIsCollecting(false);
+    }
+  };
+
+  const downloadCSV = () => {
+    if (collectedList.length === 0) return;
+    
+    const headers = Object.keys(collectedList[0]).join(',');
+    const rows = collectedList.map(item => 
+      Object.values(item).map(val => `"${val}"`).join(',')
+    );
+    const csv = [headers, ...rows].join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `hotpepper_list.csv`;
+    link.click();
+  };
+
+  // ファイル一覧を取得
+  const loadFiles = async () => {
+    setIsLoadingFiles(true);
+    try {
+      const response = await fetch('/api/files/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      setFiles(data.files || []);
+    } catch (error) {
+      console.error('ファイル一覧の取得に失敗:', error);
+      setFiles([]);
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  };
+
+  // ファイルをダウンロード（getUrl方式）
+  const downloadFileGetUrl = async (storageId: string, fileName: string) => {
+    try {
+      const response = await fetch('/api/files/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storageId, fileName, useHttpAction: false })
+      });
+      const data = await response.json();
+      
+      if (data.success && data.url) {
+        console.log(`ダウンロード方式: ${data.method}`);
+        
+        // 適切なダウンロード処理
+        const link = document.createElement('a');
+        link.href = data.url;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } else {
-        throw new Error('音声変換に失敗しました');
+        alert('ダウンロードに失敗しました: ' + data.error);
       }
     } catch (error) {
-      console.error('Transcription error:', error);
-      toast.error('音声変換に失敗しました');
+      console.error('ダウンロードエラー:', error);
+      alert('ダウンロードに失敗しました');
     }
   };
-
-  const startDescriptionRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const audioChunks: Blob[] = [];
-
-      recorder.ondataavailable = (event) => {
-        audioChunks.push(event.data);
-      };
-
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        await transcribeAudio(audioBlob, true);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      recorder.start();
-      setDescriptionMediaRecorder(recorder);
-      setIsRecordingDescription(true);
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      toast.error('マイクへのアクセスが拒否されました');
-    }
-  };
-
-  const stopDescriptionRecording = () => {
-    if (descriptionMediaRecorder && descriptionMediaRecorder.state === 'recording') {
-      descriptionMediaRecorder.stop();
-      setIsRecordingDescription(false);
-      setDescriptionMediaRecorder(null);
-    }
-  };
-
-  const submitInngestForGenerate = async (data: InngestForGenerateValues) => {
-    // フォームデータの取得
-    const rawData = data;
-
-    // サーバーサイドバリデーション（クライアント側でも実施）
-    if (!rawData.query) {
-        return { error: "必須項目が入力されていません" };
-    }
-
-    await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-        "Content-Type": "application/json",
-        },
-        body: JSON.stringify(rawData),
-    });
-}
-
 
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-4">
-      <main className="flex flex-col gap-4 row-start-2 items-center sm:items-start w-full max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold">Inngest Queue Funtion</h1>
-        <p className="text-sm text-gray-500">
-          Are you ready to generate?
-        </p>
-        <div className="relative h-full w-full mt-6">
-          <div className="flex flex-col gap-4 my-2">
-            <div className="flex flex-col gap-4">
-             <div className="flex justify-end">
-             <Button variant="destructive" onClick={handleReset}>Reset</Button>
-             </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 space-y-0 sm:space-y-6">
-                <div className="flex flex-col gap-2">
-                  <Label className="text-sm font-bold">Name</Label>
-                  <Input value={generateConfig.menuName} onChange={(e) => setGenerateConfig({ ...generateConfig, menuName: e.target.value })} />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label className="text-sm font-bold">Price</Label>
-                  <Input value={generateConfig.menuPrice} onChange={(e) => setGenerateConfig({ ...generateConfig, menuPrice: e.target.value })} />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label className="text-sm font-bold">Category</Label>
-                  <Select value={generateConfig.category} onValueChange={(value: string) => setGenerateConfig({ ...generateConfig, category: value })}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category} value={category}>{category}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label className="text-sm font-bold">Target Gender</Label>
-                  <Select value={generateConfig.targetGender} onValueChange={(value: string) => setGenerateConfig({ ...generateConfig, targetGender: value })}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a gender" />
-                    </SelectTrigger>
-                    <SelectContent > 
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label className="text-sm font-bold">Platform</Label>
-                  <Select value={generateConfig.platform} onValueChange={(value: string) => setGenerateConfig({ ...generateConfig, platform: value })}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a platform" />
-                    </SelectTrigger>
-                    <SelectContent > 
-                      <SelectItem value="ec">ec</SelectItem>
-                      <SelectItem value="sns">sns</SelectItem>
-                      <SelectItem value="menu">menu</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label className="text-sm font-bold">Tone</Label>
-                  <Select value={generateConfig.tone} onValueChange={(value: string) => setGenerateConfig({ ...generateConfig, tone: value })}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a tone" />
-                    </SelectTrigger>
-                    <SelectContent > 
-                      <SelectItem value="casual">Casual</SelectItem>
-                      <SelectItem value="formal">Formal</SelectItem>
-                      <SelectItem value="luxury">Luxury</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2 col-span-1 sm:col-span-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-bold">Menu Description</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={isRecordingDescription ? stopDescriptionRecording : startDescriptionRecording}
-                      disabled={isGenerating || isInterval}
-                      className={`${isRecordingDescription ? 'bg-red-100 border-red-300' : ''}`}
-                    >
-                      {isRecordingDescription ? (
-                        <>
-                          <MicOff className="w-4 h-4 text-red-500 animate-pulse" />
-                          <span className="hidden sm:inline text-red-500 animate-pulse">Recording...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Mic className="w-4 h-4" />
-                          <span className="hidden sm:inline">Record Description</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <Textarea rows={4} className="resize-none h-[120px] sm:h-[200px]" value={generateConfig.menuDescription} onChange={(e) => setGenerateConfig({ ...generateConfig, menuDescription: e.target.value })} />
-                </div>
-              
-              <div className="flex flex-col gap-2 col-span-1 sm:col-span-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-bold">Prompt</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isGenerating || isInterval}
-                    className={`${isRecording ? 'bg-red-100 border-red-300' : ''}`}
-                  >
-                    {isRecording ? (
-                      <>
-                        <MicOff className="w-4 h-4 text-red-500 animate-pulse" />
-                        <span className="hidden sm:inline text-red-500 animate-pulse">Recording...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="w-4 h-4" />
-                        <span className="hidden sm:inline">Record Prompt</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-                <Textarea rows={12} className="resize-none h-[120px] sm:h-[200px]" disabled={isGenerating || isInterval} value={query} onChange={(e) => setQuery(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 mt-4 w-full items-start justify-start gap-2 col-span-1 sm:col-span-2">
-              <Button className="w-full" variant="default" onClick={handleGenerate} disabled={isGenerating || isInterval}>
-                {isGenerating ? <>
-                  <Loader2 className="animate-spin" />
-                  <span className="hidden sm:inline">Generating...</span>
-                </> : isInterval ?  <>
-                  <LockIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">Interval...</span>
-                </> : <>
-                  <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">Generate</span>
-               </>}
-              </Button>
-              <Button className="w-full" variant="outline" onClick={handleExport} disabled={isExporting || isInterval}>
-                {isExporting ? <>
-                  <Loader2 className="animate-spin" />
-                  <span className="hidden sm:inline">Exporting...</span>
-                </> : isInterval ? <>
-                  <LockIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">Interval...</span>
-                </> : <>
-                  <Download className="w-4 h-4" />
-                  <span className="hidden sm:inline">Export</span>
-                </>}
-              </Button>
-              </div>
-            </div>
-          </div>
-          </div>
+    <div className="max-w-2xl mx-auto flex flex-col p-8 min-h-screen overflow-hidden">
+      <h1 className="text-2xl font-bold mb-8">自動化ツールサンプル</h1>
+      
+      <Tabs defaultValue="generate" className="w-full">
+        <div className="w-full overflow-x-auto">
+          <TabsList className="flex w-max min-w-full">
+            <TabsTrigger value="generate" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
+              <Wand2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">SNS投稿生成</span>
+              <span className="sm:hidden">SNS生成</span>
+            </TabsTrigger>
+            <TabsTrigger value="collect" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
+              <Search className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">営業リスト収集</span>
+              <span className="sm:hidden">リスト収集</span>
+            </TabsTrigger>
+            <TabsTrigger value="files" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
+              <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">ファイル管理</span>
+              <span className="sm:hidden">ファイル</span>
+            </TabsTrigger>
+            <TabsTrigger value="rag" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
+              <Bot className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">RAGチャットボット</span>
+              <span className="sm:hidden">チャット</span>
+            </TabsTrigger>
+          </TabsList>
         </div>
-      <div className="flex flex-col gap-4 w-full">
-        {generateContents?.map((content) => (
-          <div key={content._id} className="relative flex flex-col gap-2 border-b border-slate-200 pb-4 w-full">
-            {
-              content.checked ? null : (
-                <div className="absolute top-1 z-10 right-1">
-                  <Button variant="default" size="sm" className="cursor-pointer bg-emerald-600 shadow-md border-white text-white hover:bg-emerald-700 hover:border-emerald-700" onClick={() => handleCheck(content._id)}>
-                    Generate Complete🎊
-                  <CheckIcon className="w-6 h-6 text-white mt-1 flex-shrink-0" />
+        
+        <TabsContent value="generate" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wand2 className="h-5 w-5" />
+                SNS投稿生成ツール
+              </CardTitle>
+              <CardDescription>
+                キーワードや内容を入力して、魅力的なSNS投稿を自動生成します
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="prompt" className="text-sm font-medium">
+                  投稿したい内容やキーワード
+                </label>
+                <Textarea
+                  id="prompt"
+                  placeholder="例：新商品のコーヒー豆について、香りと味わいの特徴を強調したい"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="min-h-[100px] resize-none"
+                />
+              </div>
+              
+              <Button 
+                onClick={handleGenerate}
+                disabled={!prompt.trim() || isGenerating}
+                className="w-full sm:w-auto"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    投稿を生成
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {result && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  生成結果
+                  <Badge variant="secondary">AI生成</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 bg-gray-50 rounded-lg border">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                    {result}
+                  </p>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => navigator.clipboard.writeText(result)}
+                  >
+                    コピー
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setResult("")}
+                  >
+                    クリア
                   </Button>
                 </div>
-              )
-            }
-            <div className="flex items-start gap-2 bg-indigo-50 p-2 rounded-md">
-              <InfoIcon className="w-6 h-6 text-indigo-500 mt-1 flex-shrink-0" />
-              <p className="text-sm font-bold break-words">生成プロンプト：{content.query.slice(0, 32)}...</p>
-            </div>
-            <div className="flex flex-col my-2">
-              <p className="text-sm leading-4 text-slate-800 break-words">生成結果：{content.result.slice(0, 120)}...</p>
-            </div>
-            <div className="flex w-full items-end justify-between  gap-2">
-              <div className="scale-75 -translate-x-[10%]">
-                <p className="text-xs text-slate-500">Generate Time: <strong>{content.time}sec</strong></p>
-                <p className="text-xs text-slate-500">CreatedAt: <strong>{new Date(content._creationTime).toLocaleString()}</strong></p>
-                <p className="text-xs text-slate-500">Event ID: <strong>{content.eventId}</strong></p>
-              </div>
-              <div className="w-full flex justify-end">
-                <Button variant="link" className=" cursor-pointer text-indigo-500 underline text-xs sm:text-sm" onClick={() => handleViewMore(content)}>View more</Button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="bg-blue-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-blue-800">使い方のヒント</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-blue-700 space-y-2">
+              <p>• 具体的なキーワードや商品名を含めると、より適切な投稿が生成されます</p>
+              <p>• ターゲット層や投稿の目的（宣伝、情報共有など）を明記すると効果的です</p>
+              <p>• ハッシュタグや絵文字も自動で提案されます</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
         
-          <DialogContent className="max-w-[95vw] sm:max-w-2xl pt-10 max-h-[90vh] overflow-y-auto">
-            <DialogHeader>  
-              <DialogTitle className="text-sm font-bold text-slate-600">Prompt</DialogTitle>
-              <DialogDescription className="text-sm font-bold text-slate-800 break-words">{selectedContent?.query}</DialogDescription>
-            </DialogHeader>
-            <p className="text-sm text-slate-800 break-words whitespace-pre-wrap">{selectedContent?.result}</p>
-            <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0 justify-between items-center">  
-              <Button variant="outline" onClick={() => navigator.clipboard.writeText(selectedContent?.result || "")} className="w-full sm:w-auto">Copy</Button>
-              <Button onClick={() => setIsOpen(false)} className="w-full sm:w-auto">Close</Button>
-            </DialogFooter>
-          </DialogContent>
-      </Dialog> 
-      </main>
+        <TabsContent value="collect" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                営業リスト収集ツール
+              </CardTitle>
+              <CardDescription>
+                ホットペッパーから営業先のリストを自動収集します
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
+                <label className="text-sm font-medium">
+                  ホットペッパーエリア選択
+                </label>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-600">
+                      都道府県・地域
+                    </label>
+                    <Select value={selectedMainArea} onValueChange={handleMainAreaChange}>
+                      <SelectTrigger className="text-xs">
+                        <SelectValue placeholder="地域を選択" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(AREA_URL_MAP).map((areaName) => (
+                          <SelectItem key={areaName} value={areaName}>
+                            {areaName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-600">
+                      サブエリア
+                    </label>
+                    <Select 
+                      value={selectedSubArea} 
+                      onValueChange={handleSubAreaChange}
+                      disabled={!selectedMainArea || isLoadingSubAreas}
+                    >
+                      <SelectTrigger className="text-xs">
+                        <SelectValue placeholder={
+                          isLoadingSubAreas ? "読み込み中..." : "サブエリアを選択"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subAreas.map((subArea) => (
+                          <SelectItem key={subArea.url} value={subArea.url}>
+                            {subArea.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-600">
+                      詳細エリア
+                    </label>
+                    <Select 
+                      value={selectedDetailArea} 
+                      onValueChange={setSelectedDetailArea}
+                      disabled={!selectedSubArea || isLoadingDetailAreas}
+                    >
+                      <SelectTrigger className="text-xs">
+                        <SelectValue placeholder={
+                          isLoadingDetailAreas ? "読み込み中..." : "詳細エリアを選択"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {detailAreas.map((detailArea) => (
+                          <SelectItem key={detailArea.url} value={detailArea.url}>
+                            {detailArea.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                {(selectedMainArea || selectedSubArea || selectedDetailArea) && (
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="flex flex-col md:flex-row items-start gap-2 text-sm text-blue-800">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        <span className="font-medium text-xs">選択中のエリア:</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-500">
+                        {selectedMainArea + " > "}
+                        <br />
+                        {selectedSubArea && subAreas.find(s => s.url === selectedSubArea) && 
+                          `${subAreas.find(s => s.url === selectedSubArea)?.name} > `
+                        }
+                        <br />
+                        {selectedDetailArea && detailAreas.find(d => d.url === selectedDetailArea) && 
+                          `${detailAreas.find(d => d.url === selectedDetailArea)?.name}`
+                        }
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <Button 
+                onClick={handleCollectList}
+                disabled={!selectedMainArea || isCollecting}
+                className="w-full sm:w-auto"
+              >
+                {isCollecting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    収集中...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="mr-2 h-4 w-4" />
+                    リスト収集開始
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {collectedList.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  収集結果 ({collectedList.length}件)
+                  <Button variant="outline" size="sm" onClick={downloadCSV}>
+                    <Download className="mr-2 h-4 w-4" />
+                    CSV保存
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-64 overflow-y-auto">
+                  <div className="space-y-2">
+                    {collectedList.slice(0, 5).map((item, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded border">
+                        <div className="font-medium text-sm">{item.name || '店舗名'}</div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          {item.address || '住所情報'} | {item.phone || '電話番号'}
+                        </div>
+                      </div>
+                    ))}
+                    {collectedList.length > 5 && (
+                      <div className="text-center text-sm text-gray-500 py-2">
+                        ...他{collectedList.length - 5}件
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="bg-green-50 border-green-200">
+            <CardHeader>
+              <CardTitle className="text-green-800">使い方のヒント</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-green-700 space-y-2">
+              <p>• エリアを選択してからリスト収集を開始してください</p>
+              <p>• より詳細なエリアを選択すると、絞り込まれた結果が得られます</p>
+              <p>• 収集したデータはCSV形式でダウンロードできます</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="files" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="h-5 w-5" />
+                ファイル管理
+              </CardTitle>
+              <CardDescription>
+                生成されたCSVファイルの一覧とダウンロード
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-between items-center">
+                <Button onClick={loadFiles} disabled={isLoadingFiles}>
+                  {isLoadingFiles ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      読み込み中...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      ファイル一覧を更新
+                    </>
+                  )}
+                </Button>
+              </div>
+              
+              <div className="space-y-2">
+                {files.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">
+                    アップロードされたファイルはありません
+                  </p>
+                ) : (
+                  files.map((file, index) => (
+                    <div key={file.storageId || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{file.fileName}</div>
+                        <div className="text-xs text-gray-500">
+                          {file.metadata?.recordCount ? `${file.metadata.recordCount}件` : ''} 
+                          {file.metadata?.scrapedAt ? ` • ${new Date(file.metadata.scrapedAt).toLocaleDateString('ja-JP')}` : ''}
+                          {file.size ? ` • ${Math.round(file.size / 1024)}KB` : ''}
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => downloadFileGetUrl(file.storageId, file.fileName)}
+                          title="getUrl方式でダウンロード"
+                        >
+                          <Download className="h-3 w-3" />
+                          <span className="ml-1 text-xs">標準</span>
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rag" className="space-y-6 mt-6">
+        <div className="relative iframe-container">
+                {!isIframeLoaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-50 rounded-lg border" style={{minHeight: "700px"}}>
+                    <div className="flex flex-col items-center gap-4">
+                      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                      <p className="text-gray-500">チャットボットを読み込み中...</p>
+                    </div>
+                  </div>
+                )}
+                <iframe
+                  src="https://udify.app/chatbot/GlZ3tnzKc5WvGufT"
+                  style={{
+                    width: "100%", 
+                    height: "100%", 
+                    minHeight: "700px",
+                    border: "none",
+                    borderRadius: "1rem"
+                  }}
+                  allow="microphone"
+                  onLoad={() => setIsIframeLoaded(true)}>
+                </iframe>
+                {/* Overlay to hide branding */}
+                <div 
+                  className="absolute bottom-0 left-0 right-0 bg-white pointer-events-none"
+                  style={{ height: "60px", borderBottomLeftRadius: "0.5rem", borderBottomRightRadius: "0.5rem" }}
+                />
+              </div>
+         </TabsContent>
+      </Tabs>
     </div>
   );
 }

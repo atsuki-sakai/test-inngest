@@ -17,24 +17,36 @@ interface GenerateRequest {
 
 // Create a simple async Next.js API route handler
 export async function POST(request: Request) {
-  const { menuName, category, targetGender, menuDescription, menuPrice, query, platform, tone } = await request.json() as GenerateRequest;
-  if (!menuName ) {
-    return NextResponse.json({ message: "menuName is required" }, { status: 400 });
-  }
-  // Send your event payload to Inngest
-  const response = await inngest.send({
-    name: "generate",
-    data: {
-      menuName: menuName,
-      category: category,
-      targetGender: targetGender,
-      menuDescription: menuDescription,
-      menuPrice: menuPrice,
-      query: query,
-      platform: platform,
-      tone: tone
-    },
-  });
+  try {
+    const { menuName, category, targetGender, menuDescription, menuPrice, query, platform, tone } = await request.json() as GenerateRequest;
+    if (!menuName ) {
+      return NextResponse.json({ message: "menuName is required" }, { status: 400 });
+    }
+    
+    // Send your event payload to Inngest
+    const response = await inngest.send({
+      name: "generate",
+      data: {
+        menuName: menuName,
+        category: category,
+        targetGender: targetGender,
+        menuDescription: menuDescription,
+        menuPrice: menuPrice,
+        query: query,
+        platform: platform,
+        tone: tone
+      },
+    });
 
-  return NextResponse.json({ message: JSON.stringify(response) }, { status: 200 });
+    return NextResponse.json({ 
+      message: "Event sent successfully",
+      eventId: response.ids?.[0] || null // Inngestのevent IDを返す
+    }, { status: 200 });
+  } catch (error) {
+    console.error('Generate API error:', error);
+    return NextResponse.json({ 
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : "Unknown error"
+    }, { status: 500 });
+  }
 }
