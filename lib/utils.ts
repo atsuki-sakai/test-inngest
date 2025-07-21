@@ -4,7 +4,6 @@ import { twMerge } from "tailwind-merge"
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
-import { URL } from 'node:url';
 import { calculateInstagramRelevance } from '@/services/instagramExtractor';
 
 // ======================= ユーティリティ関数 ========================
