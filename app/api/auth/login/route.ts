@@ -6,6 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     const { password } = await request.json();
 
+
     if (!password) {
       return NextResponse.json(
         { success: false, message: 'パスワードが必要です' },
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 8 * 60 * 60, // 8時間
+      maxAge: 1 * 60 * 60, // 1時間
       path: '/',
     });
 
