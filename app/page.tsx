@@ -84,7 +84,13 @@ export default function Home() {
     } catch {
       toast.error("エラーが発生しました");
     } finally {
-      setIsGenerating(false);
+      setInterval(() => {
+        setIsGenerating(false);
+      }, 2000)
+      setPrompt('')
+      setPostType('')
+      setSelectedPlatform('')
+      setTargetAudience('')
     }
   };
 
@@ -514,10 +520,7 @@ export default function Home() {
                 className="mt-4"
               />
 
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
+
                 <Button 
                   onClick={handleGenerate} 
                   disabled={isGenerating || !prompt.trim()}
@@ -535,7 +538,6 @@ export default function Home() {
                   </>
                 )}
               </Button>
-              </motion.div>
             </CardContent>
           </Card>
           </motion.div>
