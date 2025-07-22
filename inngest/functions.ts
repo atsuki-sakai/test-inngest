@@ -104,11 +104,295 @@ export const generate = inngest.createFunction(
       query: event.data.query,
       result: completion.choices[0].message.content || "",
       time: elapsedTimeInSeconds, // 1.2のような数値
+      contextJson: JSON.stringify({
+        steps: {
+          
+        }
+      }),
     });
     return { message: completion.choices[0].message.content };
   },
 );
 
+
+// フレームワーク別のプロンプト生成
+const generateFrameworkPrompt = (framework: string, data: {
+  platform: string;
+  targetAudience: string;
+  postType: string;
+  keywords: string;
+  prompt: string;
+}) => {
+  const frameworkTemplates = {
+    aida: `AIDA（注意→関心→欲求→行動）フレームワークを使用して投稿を構成してください：
+1. 【Attention】読者の注意を引く魅力的な冒頭
+2. 【Interest】関心を持続させる具体的な情報
+3. 【Desire】欲求を喚起する価値提案
+4. 【Action】明確な行動喚起`,
+    
+    pas: `PAS（問題→煽り→解決）フレームワークを使用して投稿を構成してください：
+1. 【Problem】ターゲットが抱える問題を明確化
+2. 【Agitation】その問題の深刻さや緊急性を煽る
+3. 【Solution】効果的な解決策を提示`,
+    
+    prep: `PREP（結論→理由→例→結論）フレームワークを使用して投稿を構成してください：
+1. 【Point】結論・主張を最初に明確に述べる
+2. 【Reason】その理由や根拠を説明
+3. 【Example】具体例や事例で補強
+4. 【Point】再度結論を強調して締める`,
+    
+    bab: `BAB（Before→After→Bridge）フレームワークを使用して投稿を構成してください：
+1. 【Before】現在の状況・問題
+2. 【After】理想的な未来の状態
+3. 【Bridge】その変化を実現するための方法`,
+    
+    golden_circle: `ゴールデンサークル（Why→How→What）フレームワークを使用して投稿を構成してください：
+1. 【Why】なぜこれが重要なのか（目的・理念）
+2. 【How】どのようにして実現するのか（方法・プロセス）
+3. 【What】何をするのか（具体的な内容・商品）`,
+    
+    star: `STAR（状況→課題→行動→結果）フレームワークを使用して投稿を構成してください：
+1. 【Situation】具体的な状況設定
+2. 【Task】直面した課題や問題
+3. 【Action】取った行動や対策
+4. 【Result】得られた結果や成果`,
+    
+    fab: `FAB（機能→利点→利益）フレームワークを使用して投稿を構成してください：
+1. 【Features】商品・サービスの機能や特徴
+2. 【Advantages】それによって得られる利点
+3. 【Benefits】ユーザーにとっての具体的な利益`,
+    
+    storytelling: `ストーリーテリング（起承転結）フレームワークを使用して投稿を構成してください：
+1. 【起】導入・背景設定
+2. 【承】展開・詳細説明
+3. 【転】転換点・驚きの要素
+4. 【結】結論・メッセージ`,
+    
+    quest: `QUEST（資格確認→理解→教育→刺激→移行）フレームワークを使用して投稿を構成してください：
+1. 【Qualify】ターゲットの資格確認
+2. 【Understand】問題や状況の理解
+3. 【Educate】解決策の教育
+4. 【Stimulate】行動への刺激
+5. 【Transition】次のステップへの移行`,
+    
+    scamper: `SCAMPER（創造的発想）フレームワークを使用して投稿を構成してください：
+代用・結合・応用・修正・他用途・除去・逆転の視点から斬新で差別化されたアプローチを取り入れてください`
+  };
+
+  return frameworkTemplates[framework as keyof typeof frameworkTemplates] || '';
+};
+
+// SNS投稿生成のための専門家プロンプト
+const generateSNSPostPrompt = (data: {
+  platform: string;
+  targetAudience: string;
+  postType: string;
+  keywords: string;
+  frameworks: string[];
+  prompt: string;
+}) => {
+  const platformSpecs = {
+    twitter: { limit: 280, tone: "簡潔で印象的", features: "ハッシュタグ、リツイートしやすさ" },
+    instagram: { limit: 2200, tone: "ビジュアル重視、ストーリー性", features: "ハッシュタグ、絵文字、改行" },
+    facebook: { limit: 63206, tone: "詳細で親しみやすい", features: "長文OK、リンク、画像説明" },
+    linkedin: { limit: 3000, tone: "プロフェッショナル", features: "業界用語、専門性、ビジネス価値" },
+    tiktok: { limit: 2200, tone: "若者向け、トレンド", features: "流行語、チャレンジ、音楽連想" },
+    youtube: { limit: 5000, tone: "詳細説明、SEO意識", features: "キーワード最適化、時間軸言及" }
+  };
+
+  const spec = platformSpecs[data.platform as keyof typeof platformSpecs];
+  const frameworkInstructions = data.frameworks.map(f => generateFrameworkPrompt(f, data)).join('\n\n');
+
+  return `あなたは${data.platform}に特化したSNSマーケティングの専門家です。
+
+===投稿要件===
+プラットフォーム: ${data.platform}
+文字数制限: ${spec?.limit}文字
+推奨トーン: ${spec?.tone}
+重要要素: ${spec?.features}
+ターゲット層: ${data.targetAudience}
+投稿タイプ: ${data.postType}
+キーワード: ${data.keywords}
+
+===フレームワーク指示===
+${frameworkInstructions}
+
+===投稿内容リクエスト===
+${data.prompt}
+
+===作成ガイドライン===
+1. ${data.platform}の特性を最大限活用
+2. ${data.targetAudience}に響く言葉選び
+3. ${data.postType}の目的を達成
+4. キーワード「${data.keywords}」を自然に組み込み
+5. エンゲージメントを高める要素を含める
+6. 文字数制限${spec?.limit}文字以内で最適化
+
+出力形式：
+投稿本文のみを出力してください。説明や補足は不要です。`;
+};
+
+export const generateSNSPost = inngest.createFunction(
+  { id: "generateSNSPost" },
+  { event: "generateSNSPost" },
+  async ({ event, step }) => {
+    const { platform, targetAudience, postType, keywords, frameworks, prompt } = event.data;
+
+    // ステップ1: プラットフォーム最適化専門家
+    const platformOptimized = await step.run("platform-optimization", async () => {
+      const platformPrompt = generateSNSPostPrompt({
+        platform,
+        targetAudience,
+        postType, 
+        keywords,
+        frameworks: frameworks || [],
+        prompt
+      });
+
+      const completion = await openai.chat.completions.create({
+        messages: [{ role: "user", content: platformPrompt }],
+        model: "deepseek-chat",
+      });
+
+      return completion.choices[0].message.content || "";
+    });
+
+    // ステップ2: コンテンツクリエイター専門家
+    const contentEnhanced = await step.run("content-creation", async () => {
+      const creativePrompt = `あなたはバイラルコンテンツ作成の専門家です。以下の投稿をより魅力的で共感を得やすい内容に改善してください。
+
+現在の投稿：
+${platformOptimized}
+
+改善要求：
+- 感情に訴える表現を追加
+- 共感ポイントを強化  
+- 記憶に残るフレーズを含める
+- 行動を促す要素を強化
+- ${platform}での拡散性を高める
+
+改善版投稿のみを出力してください。`;
+
+      const completion = await openai.chat.completions.create({
+        messages: [{ role: "user", content: creativePrompt }],
+        model: "deepseek-chat",
+      });
+
+      return completion.choices[0].message.content || "";
+    });
+
+    // ステップ3: マーケティング効果評価専門家
+    const marketingEvaluated = await step.run("marketing-evaluation", async () => {
+      const marketingPrompt = `あなたはSNSマーケティング効果測定の専門家です。以下の投稿のマーケティング効果を分析し、改善案を提示してください。
+
+投稿内容：
+${contentEnhanced}
+
+評価観点：
+- エンゲージメント率予測
+- ターゲット層への訴求力
+- バズる可能性
+- コンバージョン期待値
+- ブランドイメージへの影響
+
+改善された最終版投稿のみを出力してください。`;
+
+      const completion = await openai.chat.completions.create({
+        messages: [{ role: "user", content: marketingPrompt }],
+        model: "deepseek-chat",
+      });
+
+      return completion.choices[0].message.content || "";
+    });
+
+    // ステップ4: 品質管理専門家
+    const qualityAssured = await step.run("quality-assurance", async () => {
+      const platformSpecs = {
+        twitter: { limit: 280 },
+        instagram: { limit: 2200 },
+        facebook: { limit: 63206 },
+        linkedin: { limit: 3000 },
+        tiktok: { limit: 2200 },
+        youtube: { limit: 5000 }
+      };
+      
+      const qaPrompt = `あなたはSNS投稿品質管理の専門家です。以下の投稿を最終チェックし、完璧な品質に仕上げてください。
+
+投稿内容：
+${marketingEvaluated}
+
+チェック項目：
+- 文字数制限（${platformSpecs[platform as keyof typeof platformSpecs]?.limit}文字以内）
+- 文法・表記の正確性
+- 不適切な表現の除去
+- ブランドイメージとの整合性
+- ${platform}のガイドライン準拠
+- ハッシュタグ最適化
+
+最終版投稿のみを出力してください。`;
+
+      const completion = await openai.chat.completions.create({
+        messages: [{ role: "user", content: qaPrompt }],
+        model: "deepseek-chat",
+      });
+
+      return completion.choices[0].message.content || "";
+    });
+
+    // ステップ5: 専門家会議による最終調整
+    const finalResult = await step.run("expert-consensus", async () => {
+      const consensusPrompt = `4人の専門家が作成した投稿案を統合し、最高品質の投稿を生成してください。
+
+専門家の成果物：
+1. プラットフォーム最適化版: ${platformOptimized}
+2. コンテンツクリエイティブ版: ${contentEnhanced}  
+3. マーケティング最適化版: ${marketingEvaluated}
+4. 品質保証版: ${qualityAssured}
+
+統合指針：
+- 各専門家の優れた要素を組み合わせ
+- ${platform}で最大の効果を発揮
+- ${targetAudience}に最も響く内容
+- ${postType}の目的を最適に達成
+
+最終統合版投稿のみを出力してください。`;
+
+      const completion = await openai.chat.completions.create({
+        messages: [{ role: "user", content: consensusPrompt }],
+        model: "deepseek-chat",
+      });
+
+      return completion.choices[0].message.content || "";
+    });
+
+    // 結果をConvexに保存
+    const endTime = performance.now();
+    await fetchMutation(api.generate.mutation.create, {
+      eventId: event.id || "ERROR",
+      query: prompt,
+      result: finalResult,
+      contextJson: JSON.stringify({
+       steps: {
+        platformOptimized,
+        contentEnhanced, 
+        marketingEvaluated,
+        qualityAssured
+       }
+      }),
+      time: Math.round(endTime / 100) / 10,
+    });
+
+    return { 
+      message: finalResult,
+      steps: {
+        platformOptimized,
+        contentEnhanced, 
+        marketingEvaluated,
+        qualityAssured
+      }
+    };
+  }
+);
 
 export const scrapeHotPepper = inngest.createFunction(
   { id: "scrapeHotPepper" }, 

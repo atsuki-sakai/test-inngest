@@ -1,11 +1,12 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/src/inngest/client";
-import { generate, scrapeHotPepper } from "@/inngest/functions";
+import { generate, generateSNSPost, scrapeHotPepper } from "@/inngest/functions";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     generate,
+    generateSNSPost,
     scrapeHotPepper,
   ],
 });

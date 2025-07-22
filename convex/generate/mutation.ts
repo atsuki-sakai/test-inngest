@@ -8,6 +8,7 @@ export const create = mutation({
         query: v.string(),
         result: v.string(),
         time: v.number(),
+        contextJson: v.string(),
     },
     handler: async (ctx, args) => {
         await ctx.db.insert("generate", {
@@ -16,6 +17,7 @@ export const create = mutation({
             query: args.query,
             result: args.result,
             time: args.time,
+            contextJson: args.contextJson,
         });
     },
 });

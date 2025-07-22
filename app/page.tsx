@@ -4,17 +4,39 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send, Wand2, Search, Download, Globe, Bot, MapPin } from "lucide-react";
+import { Loader2, Send, Wand2, Search, Download, Globe, Bot, MapPin, Users, Hash, Brain, CheckSquare, Check, Clock } from "lucide-react";
 import { AREA_URL_MAP } from "@/lib/constants";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Doc } from "@/convex/_generated/dataModel";
+import { Switch } from "@/components/ui/switch"
 
 export default function Home() {
   // SNS生成ツール用の状態
   const [prompt, setPrompt] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState("");
+  const [keywords, setKeywords] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [targetAudience, setTargetAudience] = useState("");
+  const [postType, setPostType] = useState("");
+  const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [result, setResult] = useState("");
+  const [showJson, setShowJson] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Doc<"generate"> | null>(null);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [generationSteps] = useState([
+    { id: 1, name: "プラットフォーム最適化", description: "選択されたプラットフォームに最適化" },
+    { id: 2, name: "コンテンツクリエイション", description: "魅力的で共感を得やすい内容に改善" },
+    { id: 3, name: "マーケティング効果評価", description: "エンゲージメントとバズ要素を分析" },
+    { id: 4, name: "品質管理", description: "文法・表記・ガイドライン準拠を確認" },
+    { id: 5, name: "専門家会議", description: "4人の専門家の成果を統合" }
+  ]);
 
   // リスト収集ツール用の状態
   const [selectedMainArea, setSelectedMainArea] = useState<string>("");
@@ -36,23 +58,142 @@ export default function Home() {
   // RAGチャットボット用の状態
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
 
+  const snsPosts = useQuery(api.generate.query.list);
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     
     setIsGenerating(true);
     try {
+      // Inngestイベントを送信
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ 
+          prompt,
+          platform: selectedPlatform,
+          keywords,
+          targetAudience,
+          postType,
+          frameworks: selectedFrameworks
+        })
       });
       const data = await response.json();
-      setResult(data.result || "生成に失敗しました");
+      
+      if (!data.eventId) {
+        toast.error("イベント送信に失敗しました");
+        return;
+      }
+     
+      toast.success("投稿を生成しました");
     } catch {
-      setResult("エラーが発生しました");
+      toast.error("エラーが発生しました");
+      setCurrentStep(0);
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const platformOptions = [
+    { value: "twitter", label: "Twitter / X", limit: 280 },
+    { value: "instagram", label: "Instagram", limit: 2200 },
+    { value: "facebook", label: "Facebook", limit: 63206 },
+    { value: "linkedin", label: "LinkedIn", limit: 3000 },
+    { value: "tiktok", label: "TikTok", limit: 2200 },
+    { value: "youtube", label: "YouTube", limit: 5000 }
+  ];
+
+  const targetAudienceOptions = [
+    { value: "teens", label: "10代" },
+    { value: "twenties", label: "20代" },
+    { value: "thirties", label: "30代" },
+    { value: "forties", label: "40代" },
+    { value: "seniors", label: "50代以上" },
+    { value: "business", label: "ビジネス層" },
+    { value: "students", label: "学生" },
+    { value: "parents", label: "子育て世代" },
+    { value: "general", label: "一般ユーザー" }
+  ];
+
+  const postTypeOptions = [
+    { value: "promotion", label: "商品・サービス宣伝" },
+    { value: "information", label: "情報共有" },
+    { value: "entertainment", label: "エンターテイメント" },
+    { value: "education", label: "教育・啓発" },
+    { value: "engagement", label: "エンゲージメント重視" },
+    { value: "news", label: "ニュース・お知らせ" },
+    { value: "story", label: "ストーリー・体験談" }
+  ];
+
+  const frameworkOptions = [
+    { 
+      value: "aida", 
+      label: "AIDA", 
+      description: "注意→関心→欲求→行動の流れで構成", 
+      detail: "読者の注意を引き、関心を持たせ、欲求を喚起し、行動を促す"
+    },
+    { 
+      value: "pas", 
+      label: "PAS", 
+      description: "問題→煽り→解決の構造", 
+      detail: "問題を提示し、その深刻さを煽り、解決策を提示する"
+    },
+    { 
+      value: "prep", 
+      label: "PREP", 
+      description: "結論→理由→例→結論で論理的に", 
+      detail: "結論を先に述べ、理由と具体例で補強し、再度結論を示す"
+    },
+    { 
+      value: "bab", 
+      label: "BAB", 
+      description: "Before→After→Bridgeで変化を訴求", 
+      detail: "現在の状況、理想の未来、それを実現する橋渡し"
+    },
+    { 
+      value: "golden_circle", 
+      label: "ゴールデンサークル", 
+      description: "Why→How→Whatで本質から", 
+      detail: "なぜやるのか、どうやるのか、何をするのかの順で説明"
+    },
+    { 
+      value: "star", 
+      label: "STAR", 
+      description: "状況→課題→行動→結果で体験談", 
+      detail: "具体的な状況と課題、取った行動、得られた結果を示す"
+    },
+    { 
+      value: "fab", 
+      label: "FAB", 
+      description: "機能→利点→利益で価値訴求", 
+      detail: "機能を説明し、利点を示し、顧客にとっての利益を明確化"
+    },
+    { 
+      value: "storytelling", 
+      label: "ストーリーテリング", 
+      description: "起承転結で物語性を重視", 
+      detail: "導入→展開→転換→結論の流れで感情に訴える"
+    },
+    { 
+      value: "quest", 
+      label: "QUEST", 
+      description: "資格確認→理解→教育→刺激→移行", 
+      detail: "ターゲットを絞り、理解を深め、教育し、行動を刺激する"
+    },
+    { 
+      value: "scamper", 
+      label: "SCAMPER", 
+      description: "創造的な発想で差別化", 
+      detail: "代用・結合・応用・修正・他用途・除去・逆転の視点で新しいアイデア"
+    }
+  ];
+
+  const getCharacterLimit = () => {
+    const platform = platformOptions.find(p => p.value === selectedPlatform);
+    return platform ? platform.limit : null;
+  };
+
+  const handleFrameworkToggle = (frameworkValue: string) => {
+    setSelectedFrameworks([frameworkValue]);
   };
 
   const handleMainAreaChange = async (areaName: string) => {
@@ -224,11 +365,7 @@ export default function Home() {
               <span className="hidden sm:inline">営業リスト収集</span>
               <span className="sm:hidden">リスト収集</span>
             </TabsTrigger>
-            <TabsTrigger value="files" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
-              <Download className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">ファイル管理</span>
-              <span className="sm:hidden">ファイル</span>
-            </TabsTrigger>
+          
             <TabsTrigger value="rag" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
               <Bot className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">RAGチャットボット</span>
@@ -245,27 +382,139 @@ export default function Home() {
                 SNS投稿生成ツール
               </CardTitle>
               <CardDescription>
-                キーワードや内容を入力して、魅力的なSNS投稿を自動生成します
+                プラットフォームに最適化されたSNS投稿を生成します
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="prompt" className="text-sm font-medium">
-                  投稿したい内容やキーワード
+              <div className="flex flex-wrap gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    プラットフォーム
+                  </label>
+                  <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="プラットフォームを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {platformOptions.map((platform) => (
+                        <SelectItem key={platform.value} value={platform.value}>
+                          {platform.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    ターゲット層
+                  </label>
+                  <Select value={targetAudience} onValueChange={setTargetAudience}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="ターゲット層を選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {targetAudienceOptions.map((audience) => (
+                        <SelectItem key={audience.value} value={audience.value}>
+                          {audience.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Bot className="h-4 w-4" />
+                    投稿タイプ
+                  </label>
+                  <Select value={postType} onValueChange={setPostType}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="投稿タイプを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {postTypeOptions.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Brain className="h-4 w-4" />
+                  思考フレームワーク
+                  <Badge variant="outline" className="text-xs">
+                    {selectedFrameworks.length}個選択中
+                  </Badge>
                 </label>
-                <Textarea
-                  id="prompt"
-                  placeholder="例：新商品のコーヒー豆について、香りと味わいの特徴を強調したい"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  className="min-h-[100px] resize-none"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {frameworkOptions.map((framework) => (
+                    <div
+                      key={framework.value}
+                      className={`p-3 border rounded-lg cursor-pointer transition-all hover:border-blue-300 ${
+                        selectedFrameworks.includes(framework.value)
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200'
+                      }`}
+                      onClick={() => handleFrameworkToggle(framework.value)}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="mt-0.5">
+                          {selectedFrameworks.includes(framework.value) ? (
+                            <CheckSquare className="h-4 w-4 text-blue-600" />
+                          ) : (
+                            <div className="h-4 w-4 border border-gray-300 rounded-sm" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{framework.label}</div>
+                          <div className="text-xs text-gray-500 mt-1">{framework.description}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Hash className="h-4 w-4" />
+                  キーワード
+                </label>
+                <Input
+                  placeholder="関連するキーワードをカンマ区切りで入力（例: 旅行, グルメ, 東京）"
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
                 />
               </div>
-              
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">プロンプト</label>
+                  {selectedPlatform && (
+                    <Badge variant="outline" className="text-xs">
+                      {selectedPlatform}: 最大{getCharacterLimit()}文字
+                    </Badge>
+                  )}
+                </div>
+                <Textarea
+                  placeholder="生成したいSNS投稿の内容を説明してください..."
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="min-h-[100px]"
+                />
+              </div>
+
               <Button 
-                onClick={handleGenerate}
-                disabled={!prompt.trim() || isGenerating}
-                className="w-full sm:w-auto"
+                onClick={handleGenerate} 
+                disabled={isGenerating || !prompt.trim()}
+                className="w-full"
               >
                 {isGenerating ? (
                   <>
@@ -275,57 +524,82 @@ export default function Home() {
                 ) : (
                   <>
                     <Send className="mr-2 h-4 w-4" />
-                    投稿を生成
+                    生成する
                   </>
                 )}
               </Button>
             </CardContent>
           </Card>
-
-          {result && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+              
+          {snsPosts && snsPosts.length > 0 && snsPosts.map((post) => (
+            <div key={post._id} className="mb-4 border-b pb-4">
+              <CardHeader className="p-0">
+                <CardTitle className="text-lg flex items-center justify-between">
                   生成結果
-                  <Badge variant="secondary">AI生成</Badge>
+                  {selectedPlatform && (
+                    <Badge variant="outline">
+                      {post.result.length}/{getCharacterLimit()}文字
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="p-4 bg-gray-50 rounded-lg border">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                    {result}
-                  </p>
+              <div>
+                <div className="text-xs text-muted-foreground whitespace-pre-wrap bg-muted p-2 md:p-4 rounded-lg">{post.result.slice(0, 100)}...</div>
+                <div className="flex justify-end mt-4">
+                <Button onClick={() => {
+                  setIsOpen(true)
+                  setSelectedPost(post)
+                }}>詳細を見る</Button>
                 </div>
-                <div className="flex gap-2 mt-4">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => navigator.clipboard.writeText(result)}
-                  >
-                    コピー
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setResult("")}
-                  >
-                    クリア
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </div>
+          ))}
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                  <DialogContent className="max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>生成結果</DialogTitle>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={showJson} onCheckedChange={setShowJson} />
+                        <span className="text-sm">JSON表示</span>
+                      </div>
+                    </DialogHeader>
+                    {
+                      showJson ? (
+                        <DialogDescription className="whitespace-pre-wrap">
+                          {selectedPost?.contextJson}
+                        </DialogDescription>
+                      ) : (
+                        <DialogDescription className="whitespace-pre-wrap">
+                          {selectedPost?.result}
+                        </DialogDescription>
+                      )
+                    }
+                    
+                    <DialogFooter>
+                      <Button 
+                        variant="outline" 
+                        
+                        onClick={() => navigator.clipboard.writeText(showJson ? selectedPost?.contextJson || "" : selectedPost?.result || "")}
+                      >
+                        コピー
+                      </Button>
+                      <Button onClick={() => setIsOpen(false)}>閉じる</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
           <Card className="bg-blue-50 border-blue-200">
             <CardHeader>
               <CardTitle className="text-blue-800">使い方のヒント</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-blue-700 space-y-2">
-              <p>• 具体的なキーワードや商品名を含めると、より適切な投稿が生成されます</p>
-              <p>• ターゲット層や投稿の目的（宣伝、情報共有など）を明記すると効果的です</p>
-              <p>• ハッシュタグや絵文字も自動で提案されます</p>
+              <p>• プラットフォームを選択すると、そのプラットフォームに最適化された投稿が生成されます</p>
+              <p>• ターゲット層と投稿タイプを設定すると、より効果的な内容になります</p>
+              <p>• キーワードを設定すると、関連するハッシュタグや内容が含まれます</p>
+              <p>• 文字数制限を意識した投稿が自動で生成されます</p>
             </CardContent>
           </Card>
+          
         </TabsContent>
         
         <TabsContent value="collect" className="space-y-6 mt-6">
@@ -434,6 +708,7 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+                
               </div>
               
               <Button 
@@ -488,20 +763,6 @@ export default function Home() {
               </CardContent>
             </Card>
           )}
-
-          <Card className="bg-green-50 border-green-200">
-            <CardHeader>
-              <CardTitle className="text-green-800">使い方のヒント</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-green-700 space-y-2">
-              <p>• エリアを選択してからリスト収集を開始してください</p>
-              <p>• より詳細なエリアを選択すると、絞り込まれた結果が得られます</p>
-              <p>• 収集したデータはCSV形式でダウンロードできます</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="files" className="space-y-6 mt-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -553,7 +814,7 @@ export default function Home() {
                           title="getUrl方式でダウンロード"
                         >
                           <Download className="h-3 w-3" />
-                          <span className="ml-1 text-xs">標準</span>
+                          <span className="ml-1 text-xs">ダウンロード</span>
                         </Button>
                       </div>
                     </div>
@@ -562,7 +823,19 @@ export default function Home() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="bg-green-50 border-green-200">
+            <CardHeader>
+              <CardTitle className="text-green-800">使い方のヒント</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-green-700 space-y-2">
+              <p>• エリアを選択してからリスト収集を開始してください</p>
+              <p>• より詳細なエリアを選択すると、絞り込まれた結果が得られます</p>
+              <p>• 収集したデータはCSV形式でダウンロードできます</p>
+            </CardContent>
+          </Card>
         </TabsContent>
+
 
         <TabsContent value="rag" className="space-y-6 mt-6">
         <div className="relative iframe-container">

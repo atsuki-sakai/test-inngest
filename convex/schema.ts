@@ -10,6 +10,7 @@ export default defineSchema({
         query: v.string(), // ユーザーの入力
         result: v.string(), // 生成結果
         time: v.number(), // 生成にかかった時間
+        contextJson: v.string(), // 生成途中の結果
     })
     .index("by_event_id", ["eventId"]),
     
