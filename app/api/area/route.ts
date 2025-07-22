@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { processAreaSelection } from '@/controller/areaController';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const areaResult = await processAreaSelection();
     

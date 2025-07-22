@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { fetchMutation } from 'convex/nextjs';
 import { api } from '@/convex/_generated/api';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const files = await fetchMutation(api.files.listFiles, {});
     

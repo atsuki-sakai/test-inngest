@@ -13,8 +13,6 @@ import {
   Brain, 
   Zap, 
   Star,
-  ChevronDown,
-  ChevronUp,
   Sparkles,
   BarChart3
 } from "lucide-react";

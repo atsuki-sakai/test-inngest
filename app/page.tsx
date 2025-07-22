@@ -13,8 +13,9 @@ import { AREA_URL_MAP } from "@/lib/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import TaskProgress from "@/components/TaskProgress";
 import OptimizationGuide from "@/components/OptimizationGuide";
+import LogoutButton from "@/components/LogoutButton";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Doc } from "@/convex/_generated/dataModel";
@@ -332,7 +333,10 @@ export default function Home() {
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col p-8 min-h-screen overflow-hidden">
-      <h1 className="text-2xl font-bold mb-8">自動化ツールデモサイト</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold">自動化ツールデモサイト</h1>
+        <LogoutButton />
+      </div>
       
       <Tabs defaultValue="generate" className="w-full">
         <div className="w-full overflow-x-auto">
