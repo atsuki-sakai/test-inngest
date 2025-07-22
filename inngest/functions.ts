@@ -2,6 +2,31 @@ import { inngest } from "@/src/inngest/client";
 import OpenAI from "openai";
 import { api } from "@/convex/_generated/api";
 import { fetchMutation } from "convex/nextjs";
+import { AREA_URL_MAP } from "@/lib/constants";
+import { time } from "console";
+
+// エリアURLからエリア名を取得するヘルパー関数
+const getAreaNameFromUrl = (areaUrl: string): string => {
+  for (const [areaName, url] of Object.entries(AREA_URL_MAP)) {
+    if (areaUrl === url) {
+      return areaName;
+    }
+  }
+  // URLが一致しない場合は、URLから推測を試みる
+  if (areaUrl.includes('/svcSD/')) return '北海道';
+  if (areaUrl.includes('/svcSE/')) return '東北';
+  if (areaUrl.includes('/svcSH/')) return '北信越';
+  if (areaUrl.includes('/svcSA/')) return '関東';
+  if (areaUrl.includes('/svcSF/')) return '中国';
+  if (areaUrl.includes('/svcSC/')) return '東海';
+  if (areaUrl.includes('/svcSB/')) return '関西';
+  if (areaUrl.includes('/svcSI/')) return '四国';
+  if (areaUrl.includes('/svcSG/')) return '九州・沖縄';
+  
+  if (areaUrl.includes('/svcSD/')) return '北海道';
+  
+  return 'その他エリア';
+};
 
 // より高度なプロンプトテンプレート（役割とコンテキストを強化）
 const generateAdvancedProductDescriptionPrompt = (data: {
@@ -101,13 +126,21 @@ export const generate = inngest.createFunction(
     const elapsedTimeInSeconds = Math.round(elapsedTime / 100) / 10; // ミリ秒を秒に変換し、小数点以下1桁で四捨五入
     await fetchMutation(api.generate.mutation.create, {
       eventId: event.id || "ERROR",
-      query: event.data.query,
+      query: event.data.query || "",
       result: completion.choices[0].message.content || "",
       time: elapsedTimeInSeconds, // 1.2のような数値
       contextJson: JSON.stringify({
-        steps: {
-          
-        }
+        prompt: generateAdvancedProductDescriptionPrompt({
+          menuName: event.data.menuName,
+          category: event.data.category,
+          targetGender: event.data.targetGender,
+          menuDescription: event.data.menuDescription,
+          menuPrice: event.data.menuPrice,
+          tone: event.data.tone,
+          platform: event.data.platform,
+        }),
+        response: completion.choices[0].message.content || "",
+        model: "deepseek-chat"
       }),
     });
     return { message: completion.choices[0].message.content };
@@ -240,6 +273,36 @@ export const generateSNSPost = inngest.createFunction(
 
     // ステップ1: プラットフォーム最適化専門家
     const platformOptimized = await step.run("platform-optimization", async () => {
+
+
+    // タスクを作成（step外で実行）- 冪等性があるので重複実行されても安全
+    try {
+      await fetchMutation(api.task.mutation.createTask, {
+        eventId: event.id || "ERROR",
+        taskType: "sns_generation",
+        totalSteps: 5,
+        stepDefinitions: [
+          { stepId: "platform-optimization", name: "プラットフォーム最適化" },
+          { stepId: "content-creation", name: "コンテンツクリエイション" },
+          { stepId: "marketing-evaluation", name: "マーケティング効果評価" },
+          { stepId: "quality-assurance", name: "品質管理" },
+          { stepId: "expert-consensus", name: "専門家会議" }
+        ],
+        metadata: {
+          platform,
+          prompt
+        }
+      });
+    } catch (error) {
+      console.log(`Task creation handled gracefully for eventId: ${event.id} - this is expected if task already exists` + error);
+    }
+
+    // ステップ開始を記録
+    await fetchMutation(api.task.mutation.updateStep, {
+      eventId: event.id || "ERROR",
+      stepId: "platform-optimization",
+      status: "in_progress"
+    });
       const platformPrompt = generateSNSPostPrompt({
         platform,
         targetAudience,
@@ -254,12 +317,32 @@ export const generateSNSPost = inngest.createFunction(
         model: "deepseek-chat",
       });
 
+
+    // ステップ完了を記録
+    await fetchMutation(api.task.mutation.updateStep, {
+      eventId: event.id || "ERROR",
+      stepId: "platform-optimization",
+      status: "completed"
+    });
+      
+
       return completion.choices[0].message.content || "";
     });
 
-    // ステップ2: コンテンツクリエイター専門家
-    const contentEnhanced = await step.run("content-creation", async () => {
-      const creativePrompt = `あなたはバイラルコンテンツ作成の専門家です。以下の投稿をより魅力的で共感を得やすい内容に改善してください。
+
+    let contentEnhanced: string;
+    try {
+      // ステップ2: コンテンツクリエイター専門家
+      contentEnhanced = await step.run("content-creation", async () => {
+
+
+    // ステップ2開始を記録
+    await fetchMutation(api.task.mutation.updateStep, {
+      eventId: event.id || "ERROR",
+      stepId: "content-creation",
+      status: "in_progress"
+    });
+        const creativePrompt = `あなたはバイラルコンテンツ作成の専門家です。以下の投稿をより魅力的で共感を得やすい内容に改善してください。
 
 現在の投稿：
 ${platformOptimized}
@@ -273,17 +356,44 @@ ${platformOptimized}
 
 改善版投稿のみを出力してください。`;
 
-      const completion = await openai.chat.completions.create({
-        messages: [{ role: "user", content: creativePrompt }],
-        model: "deepseek-chat",
+        const completion = await openai.chat.completions.create({
+          messages: [{ role: "user", content: creativePrompt }],
+          model: "deepseek-chat",
+        });
+
+
+      // ステップ2完了を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "content-creation",
+        status: "completed"
       });
 
-      return completion.choices[0].message.content || "";
-    });
+        return completion.choices[0].message.content || "";
+      });
 
-    // ステップ3: マーケティング効果評価専門家
-    const marketingEvaluated = await step.run("marketing-evaluation", async () => {
-      const marketingPrompt = `あなたはSNSマーケティング効果測定の専門家です。以下の投稿のマーケティング効果を分析し、改善案を提示してください。
+    } catch (error) {
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "content-creation",
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      throw error;
+    }
+
+
+    let marketingEvaluated: string;
+    try {
+      // ステップ3: マーケティング効果評価専門家
+      marketingEvaluated = await step.run("marketing-evaluation", async () => {
+            // ステップ3開始を記録
+    await fetchMutation(api.task.mutation.updateStep, {
+      eventId: event.id || "ERROR",
+      stepId: "marketing-evaluation",
+      status: "in_progress"
+    });
+        const marketingPrompt = `あなたはSNSマーケティング効果測定の専門家です。以下の投稿のマーケティング効果を分析し、改善案を提示してください。
 
 投稿内容：
 ${contentEnhanced}
@@ -297,26 +407,54 @@ ${contentEnhanced}
 
 改善された最終版投稿のみを出力してください。`;
 
-      const completion = await openai.chat.completions.create({
-        messages: [{ role: "user", content: marketingPrompt }],
-        model: "deepseek-chat",
+        const completion = await openai.chat.completions.create({
+          messages: [{ role: "user", content: marketingPrompt }],
+          model: "deepseek-chat",
+        });
+
+              // ステップ3完了を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "marketing-evaluation",
+        status: "completed"
       });
 
-      return completion.choices[0].message.content || "";
+        return completion.choices[0].message.content || "";
+      });
+
+    } catch (error) {
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "marketing-evaluation",
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      throw error;
+    }
+
+
+    let qualityAssured: string;
+    try {
+      // ステップ4: 品質管理専門家
+      qualityAssured = await step.run("quality-assurance", async () => {
+
+    // ステップ4開始を記録
+    await fetchMutation(api.task.mutation.updateStep, {
+      eventId: event.id || "ERROR",
+      stepId: "quality-assurance",
+      status: "in_progress"
     });
 
-    // ステップ4: 品質管理専門家
-    const qualityAssured = await step.run("quality-assurance", async () => {
-      const platformSpecs = {
-        twitter: { limit: 280 },
-        instagram: { limit: 2200 },
-        facebook: { limit: 63206 },
-        linkedin: { limit: 3000 },
-        tiktok: { limit: 2200 },
-        youtube: { limit: 5000 }
-      };
-      
-      const qaPrompt = `あなたはSNS投稿品質管理の専門家です。以下の投稿を最終チェックし、完璧な品質に仕上げてください。
+        const platformSpecs = {
+          twitter: { limit: 280 },
+          instagram: { limit: 2200 },
+          facebook: { limit: 63206 },
+          linkedin: { limit: 3000 },
+          tiktok: { limit: 2200 },
+          youtube: { limit: 5000 }
+        };
+        
+        const qaPrompt = `あなたはSNS投稿品質管理の専門家です。以下の投稿を最終チェックし、完璧な品質に仕上げてください。
 
 投稿内容：
 ${marketingEvaluated}
@@ -331,17 +469,44 @@ ${marketingEvaluated}
 
 最終版投稿のみを出力してください。`;
 
-      const completion = await openai.chat.completions.create({
-        messages: [{ role: "user", content: qaPrompt }],
-        model: "deepseek-chat",
+        const completion = await openai.chat.completions.create({
+          messages: [{ role: "user", content: qaPrompt }],
+          model: "deepseek-chat",
+        });
+
+
+      // ステップ4完了を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "quality-assurance",
+        status: "completed"
       });
 
-      return completion.choices[0].message.content || "";
+        return completion.choices[0].message.content || "";
+      });
+    } catch (error) {
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "quality-assurance",
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      throw error;
+    }
+
+    let finalResult: string;
+    try {
+      // ステップ5: 専門家会議による最終調整
+      finalResult = await step.run("expert-consensus", async () => {
+
+    // ステップ5開始を記録
+    await fetchMutation(api.task.mutation.updateStep, {
+      eventId: event.id || "ERROR",
+      stepId: "expert-consensus",
+      status: "in_progress"
     });
 
-    // ステップ5: 専門家会議による最終調整
-    const finalResult = await step.run("expert-consensus", async () => {
-      const consensusPrompt = `4人の専門家が作成した投稿案を統合し、最高品質の投稿を生成してください。
+        const consensusPrompt = `4人の専門家が作成した投稿案を統合し、最高品質の投稿を生成してください。
 
 専門家の成果物：
 1. プラットフォーム最適化版: ${platformOptimized}
@@ -357,30 +522,62 @@ ${marketingEvaluated}
 
 最終統合版投稿のみを出力してください。`;
 
-      const completion = await openai.chat.completions.create({
-        messages: [{ role: "user", content: consensusPrompt }],
-        model: "deepseek-chat",
+        const completion = await openai.chat.completions.create({
+          messages: [{ role: "user", content: consensusPrompt }],
+          model: "deepseek-chat",
+        });
+
+
+      // ステップ5完了を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "expert-consensus",
+        status: "completed"
       });
 
-      return completion.choices[0].message.content || "";
-    });
+        return completion.choices[0].message.content || "";
+      });
+    } catch (error) {
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "expert-consensus",
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      throw error;
+    }
 
-    // 結果をConvexに保存
-    const endTime = performance.now();
-    await fetchMutation(api.generate.mutation.create, {
-      eventId: event.id || "ERROR",
-      query: prompt,
-      result: finalResult,
-      contextJson: JSON.stringify({
-       steps: {
-        platformOptimized,
-        contentEnhanced, 
-        marketingEvaluated,
-        qualityAssured
-       }
-      }),
-      time: Math.round(endTime / 100) / 10,
-    });
+    await step.run("save-to-convex", async () => {
+      
+      // 結果をConvexに保存（step外で実行）
+      const endTime = performance.now();
+      await fetchMutation(api.generate.mutation.create, {
+        eventId: event.id || "ERROR",
+        query: prompt,
+        result: finalResult,
+        contextJson: JSON.stringify({
+        steps: {
+          platformOptimized,
+          contentEnhanced, 
+          marketingEvaluated,
+          qualityAssured
+        }
+        }),
+        time: Math.round(endTime / 100) / 10,
+        // 生成パラメータを保存
+        platform,
+        targetAudience,
+        postType,
+        keywords,
+        frameworks,
+      });
+
+      // タスクを完了としてマーク（step外で実行）
+      await fetchMutation(api.task.mutation.completeTask, {
+        eventId: event.id || "ERROR",
+        success: true
+      });
+    })
 
     return { 
       message: finalResult,
@@ -404,14 +601,54 @@ export const scrapeHotPepper = inngest.createFunction(
     if (!areaUrl) {
       throw new Error('エリアURLが必要です');
     }
-    
-    // ステップ1: エリアのスクレイピング準備
+
+    // ステップ1: エリアのスクレイピング準備（status更新も含めてstep内で実行）
     const startTime = await step.run("prepare-scraping", async () => {
-      return performance.now();
+      await fetchMutation(api.task.mutation.createTask, {
+        eventId: event.id || "ERROR",
+        taskType: "scraping",
+        totalSteps: 6,
+        stepDefinitions: [
+          { stepId: "prepare-scraping", name: "スクレイピング準備" },
+          { stepId: "scrape-data", name: "データ収集" },
+          { stepId: "collect-instagram", name: "Instagram情報収集" },
+          { stepId: "calculate-duration", name: "処理時間記録" },
+          { stepId: "generate-and-upload-csv", name: "CSV生成・アップロード" },
+          { stepId: "save-to-convex", name: "Convex保存" }
+        ],
+        metadata: {
+          areaUrl,
+          areaName: getAreaNameFromUrl(areaUrl)
+        }
+      });
+      // ステップ開始を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "prepare-scraping", 
+        status: "in_progress"
+      });
+
+      const time = performance.now();
+
+      // ステップ完了を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "prepare-scraping",
+        status: "completed"
+      });
+
+      return time;
     });
     
-    // ステップ2: データの収集
+    // ステップ2: データの収集（status更新も含めてstep内で実行）
     const results = await step.run("scrape-data", async () => {
+      // ステップ開始を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "scrape-data",
+        status: "in_progress"
+      });
+
       const { getAllSalons, extractSalonDetails } = await import('@/services/crawler');
       
       console.log('Starting comprehensive scraping for areaUrl:', areaUrl);
@@ -471,12 +708,26 @@ export const scrapeHotPepper = inngest.createFunction(
       }
       
       console.log(`Scraped ${scrapedResults.length} salons with full detailed records`);
+
+      // ステップ完了を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "scrape-data",
+        status: "completed"
+      });
       
       return scrapedResults;
     });
     
-    // ステップ3: Instagram情報の収集
+    // ステップ3: Instagram情報の収集（status更新も含めてstep内で実行）
     const enrichedResults = await step.run("collect-instagram", async () => {
+      // ステップ開始を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "collect-instagram",
+        status: "in_progress"
+      });
+
       const { generateInstagramSearchQueries, extractInstagramFromSearchItem } = await import('@/services/instagramExtractor');
       
       console.log('Starting Instagram collection for salons...');
@@ -527,131 +778,186 @@ export const scrapeHotPepper = inngest.createFunction(
       }
       
       console.log(`Instagram collection completed for ${results.length} salons`);
+
+      // ステップ完了を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "collect-instagram",
+        status: "completed"
+      });
       
       return enrichedSalons;
     });
 
-    // ステップ4: 処理時間の記録
+    // ステップ4: 処理時間の記録（status更新も含めてstep内で実行）
     const endTime = await step.run("calculate-duration", async () => {
+      // ステップ開始を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "calculate-duration",
+        status: "in_progress"
+      });
+
       const elapsed = performance.now() - startTime;
-      return Math.round(elapsed / 100) / 10; // 秒単位に変換
+      const elapsedSeconds = Math.round(elapsed / 100) / 10; // 秒単位に変換
+
+      // ステップ完了を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "calculate-duration",
+        status: "completed"
+      });
+
+      return elapsedSeconds;
     });
     
-    // ステップ5: CSVファイル生成とアップロード
+    // ステップ5: CSVファイル生成とアップロード（status更新も含めてstep内で実行）
     const csvFileUrl = await step.run("generate-and-upload-csv", async () => {
-      // CSVデータを生成
-      const csvHeaders = [
-        'サロン名', '住所', '電話番号', 'URL', 'CSTT', 'Instagram',
-        'アクセス', '営業時間', '定休日', '支払い方法',
-        'カット価格', 'スタッフ数', 'こだわり条件', '備考', 'その他'
-      ];
-      
-      const csvRows = enrichedResults.map(salon => {
-        const salonData = salon as {
-          name?: string;
-          address?: string;
-          phone?: string;
-          url?: string;
-          cstt?: string;
-          instagram?: string;
-          access?: string;
-          businessHours?: string;
-          closedDays?: string;
-          paymentMethods?: string;
-          cutPrice?: string;
-          staffCount?: string;
-          features?: string;
-          remarks?: string;
-          other?: string;
-        };
-        
-        return [
-          salonData.name || '',
-          salonData.address || '',
-          salonData.phone || '',
-          salonData.url || '',
-          salonData.cstt || '',
-          salonData.instagram || '',
-          salonData.access || '',
-          salonData.businessHours || '',
-          salonData.closedDays || '',
-          salonData.paymentMethods || '',
-          salonData.cutPrice || '',
-          salonData.staffCount || '',
-          salonData.features || '',
-          salonData.remarks || '',
-          salonData.other || ''
-        ].map(value => {
-          // CSVエスケープ処理（ダブルクォートとカンマを処理）
-          const escaped = String(value).replace(/"/g, '""');
-          return `"${escaped}"`;
-        }).join(',');
+      // ステップ開始を記録
+      await fetchMutation(api.task.mutation.updateStep, {
+        eventId: event.id || "ERROR",
+        stepId: "generate-and-upload-csv",
+        status: "in_progress"
       });
-      
-      // UTF-8 BOMを追加してExcelで正しく開けるようにする
-      const BOM = '\uFEFF';
-      const csvHeaderRow = csvHeaders.map(header => `"${header}"`).join(',');
-      const csvContent = BOM + [csvHeaderRow, ...csvRows].join('\n');
-      const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-      
-      // Convexのファイルストレージにアップロード
-      const api = (await import('@/convex/_generated/api')).api;
-      
-      try {
-        // アップロードURL生成
-        const uploadUrl = await fetchMutation(api.files.generateUploadUrl, {});
+        // CSVデータを生成
+        const csvHeaders = [
+          'サロン名', '住所', '電話番号', 'URL', 'CSTT', 'Instagram',
+          'アクセス', '営業時間', '定休日', '支払い方法',
+          'カット価格', 'スタッフ数', 'こだわり条件', '備考', 'その他'
+        ];
         
-        // ファイルをアップロード
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const fileName = `hotpepper-scraping-${timestamp}.csv`;
-        
-        // Convex公式推奨：BlobまたはFileを直接bodyに指定
-        const csvFile = new File([csvBlob], fileName, { 
-          type: 'text/csv;charset=utf-8' 
+        const csvRows = enrichedResults.map(salon => {
+          const salonData = salon as {
+            name?: string;
+            address?: string;
+            phone?: string;
+            url?: string;
+            cstt?: string;
+            instagram?: string;
+            access?: string;
+            businessHours?: string;
+            closedDays?: string;
+            paymentMethods?: string;
+            cutPrice?: string;
+            staffCount?: string;
+            features?: string;
+            remarks?: string;
+            other?: string;
+          };
+          
+          return [
+            salonData.name || '',
+            salonData.address || '',
+            salonData.phone || '',
+            salonData.url || '',
+            salonData.cstt || '',
+            salonData.instagram || '',
+            salonData.access || '',
+            salonData.businessHours || '',
+            salonData.closedDays || '',
+            salonData.paymentMethods || '',
+            salonData.cutPrice || '',
+            salonData.staffCount || '',
+            salonData.features || '',
+            salonData.remarks || '',
+            salonData.other || ''
+          ].map(value => {
+            // CSVエスケープ処理（ダブルクォートとカンマを処理）
+            const escaped = String(value).replace(/"/g, '""');
+            return `"${escaped}"`;
+          }).join(',');
         });
         
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: { 
-            "Content-Type": "text/csv;charset=utf-8" 
-          },
-          body: csvFile, // FormDataではなくFileを直接指定
-        });
+        // UTF-8 BOMを追加してExcelで正しく開けるようにする
+        const BOM = '\uFEFF';
+        const csvHeaderRow = csvHeaders.map(header => `"${header}"`).join(',');
+        const csvContent = BOM + [csvHeaderRow, ...csvRows].join('\n');
+        const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
         
-        if (!uploadResponse.ok) {
-          throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-        }
+        // Convexのファイルストレージにアップロード
+        const apiImport = (await import('@/convex/_generated/api')).api;
         
-        const { storageId } = await uploadResponse.json();
-        
-        // ファイルメタデータをConvexに保存
-        await fetchMutation(api.files.saveFile, {
-          storageId,
-          fileName,
-          fileType: 'text/csv',
-          size: csvBlob.size,
-          metadata: {
-            eventId: event.id || "unknown",
-            areaUrl,
-            recordCount: enrichedResults.length,
-            duration: endTime,
-            scrapedAt: new Date().toISOString()
+        try {
+          // アップロードURL生成
+          const uploadUrl = await fetchMutation(apiImport.files.generateUploadUrl, {});
+          
+          // ファイルをアップロード
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const areaName = getAreaNameFromUrl(areaUrl);
+          const fileName = `${timestamp.split('T')[0]}-hotpepper-${areaName}.csv`;
+          
+          // Convex公式推奨：BlobまたはFileを直接bodyに指定
+          const csvFile = new File([csvBlob], fileName, { 
+            type: 'text/csv;charset=utf-8' 
+          });
+          
+          const uploadResponse = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 
+              "Content-Type": "text/csv;charset=utf-8" 
+            },
+            body: csvFile, // FormDataではなくFileを直接指定
+          });
+          
+          if (!uploadResponse.ok) {
+            throw new Error(`Upload failed: ${uploadResponse.statusText}`);
           }
-        });
-        
-        console.log(`CSV file uploaded successfully: ${fileName} (${enrichedResults.length} records)`);
-        return { storageId, fileName, recordCount: enrichedResults.length };
-        
-      } catch (error) {
-        console.error('CSV upload failed:', error);
-        // アップロード失敗時もローカルCSVは生成済みなので続行
-        return { error: error instanceof Error ? error.message : 'Unknown error' };
-      }
-    });
+          
+          const { storageId } = await uploadResponse.json();
+          
+          // ファイルメタデータをConvexに保存
+          await fetchMutation(apiImport.files.saveFile, {
+            storageId,
+            fileName,
+            fileType: 'text/csv',
+            size: csvBlob.size,
+            metadata: {
+              eventId: event.id || "unknown",
+              areaUrl,
+              areaName,
+              recordCount: enrichedResults.length,
+              duration: endTime,
+              scrapedAt: new Date().toISOString()
+            }
+          });
+          
+          console.log(`CSV file uploaded successfully: ${fileName} (${enrichedResults.length} records)`);
+          const result = { storageId, fileName, recordCount: enrichedResults.length };
+          
+          // ステップ完了を記録
+          await fetchMutation(api.task.mutation.updateStep, {
+            eventId: event.id || "ERROR",
+            stepId: "generate-and-upload-csv",
+            status: "completed"
+          });
+          
+          return result;
+          
+        } catch (uploadError) {
+          console.error('CSV upload failed:', uploadError);
+          // アップロード失敗時もローカルCSVは生成済みなので続行
+          const result = { error: uploadError instanceof Error ? uploadError.message : 'Unknown error' };
+          
+          // ステップ完了を記録
+          await fetchMutation(api.task.mutation.updateStep, {
+            eventId: event.id || "ERROR",
+            stepId: "generate-and-upload-csv",
+            status: "completed"
+          });
+          
+          return result;
+        }
+      });
 
-    // ステップ6: 結果をConvexに保存
-    await step.run("save-to-convex", async () => {
-      try {
+    try {
+      // ステップ6: 結果をConvexに保存（status更新も含めてstep内で実行）
+      await step.run("save-to-convex", async () => {
+        // ステップ開始を記録
+        await fetchMutation(api.task.mutation.updateStep, {
+          eventId: event.id || "ERROR",
+          stepId: "save-to-convex",
+          status: "in_progress"
+        });
         await fetchMutation(api.scraping.create, {
           eventId: event.id || "ERROR",
           areaUrl,
@@ -661,11 +967,25 @@ export const scrapeHotPepper = inngest.createFunction(
           csvFileInfo: csvFileUrl
         });
         console.log('Results saved to Convex successfully');
-      } catch (error) {
-        console.error('Failed to save results to Convex:', error);
-        // エラーでも処理は継続
-      }
+        
+        // ステップ完了を記録
+        await fetchMutation(api.task.mutation.updateStep, {
+          eventId: event.id || "ERROR",
+          stepId: "save-to-convex",
+          status: "completed"
+        });
+        // タスクを完了としてマーク
+        await fetchMutation(api.task.mutation.completeTask, {
+          eventId: event.id || "ERROR",
+          success: true
     });
+    
+      });
+    } catch (error) {
+      console.error('Failed to save results to Convex:', error);
+      // step内でのエラーハンドリングは不要（step内で完結させる）
+      throw error;
+    }
     
     return {
       success: true,

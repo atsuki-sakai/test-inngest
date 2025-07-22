@@ -20,7 +20,8 @@ export const create = mutation({
       staffCount: v.optional(v.string()),
       features: v.optional(v.string()),
       remarks: v.optional(v.string()),
-      other: v.optional(v.string())
+      other: v.optional(v.string()),
+      queries: v.optional(v.array(v.string()))
     })),
     duration: v.number(),
     totalCount: v.number(),

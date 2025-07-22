@@ -17,6 +17,7 @@ export const saveFile = mutation({
     metadata: v.optional(v.object({
       eventId: v.string(),
       areaUrl: v.string(),
+      areaName: v.string(),
       recordCount: v.number(),
       duration: v.number(),
       scrapedAt: v.string()

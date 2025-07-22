@@ -8,8 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send, Wand2, Search, Download, Globe, Bot, MapPin, Users, Hash, Brain, CheckSquare, Check, Clock } from "lucide-react";
+import { Loader2, Send, Wand2, Search, Download, Globe, Bot, MapPin, Users, Hash, Brain, CheckSquare, Clock } from "lucide-react";
 import { AREA_URL_MAP } from "@/lib/constants";
+import { motion, AnimatePresence } from "framer-motion";
+import TaskProgress from "@/components/TaskProgress";
+import OptimizationGuide from "@/components/OptimizationGuide";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useQuery } from "convex/react";
@@ -29,14 +32,6 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showJson, setShowJson] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Doc<"generate"> | null>(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [generationSteps] = useState([
-    { id: 1, name: "プラットフォーム最適化", description: "選択されたプラットフォームに最適化" },
-    { id: 2, name: "コンテンツクリエイション", description: "魅力的で共感を得やすい内容に改善" },
-    { id: 3, name: "マーケティング効果評価", description: "エンゲージメントとバズ要素を分析" },
-    { id: 4, name: "品質管理", description: "文法・表記・ガイドライン準拠を確認" },
-    { id: 5, name: "専門家会議", description: "4人の専門家の成果を統合" }
-  ]);
 
   // リスト収集ツール用の状態
   const [selectedMainArea, setSelectedMainArea] = useState<string>("");
@@ -59,12 +54,13 @@ export default function Home() {
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
 
   const snsPosts = useQuery(api.generate.query.list);
+
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     
     setIsGenerating(true);
     try {
-      // Inngestイベントを送信
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -87,7 +83,6 @@ export default function Home() {
       toast.success("投稿を生成しました");
     } catch {
       toast.error("エラーが発生しました");
-      setCurrentStep(0);
     } finally {
       setIsGenerating(false);
     }
@@ -107,21 +102,17 @@ export default function Home() {
     { value: "twenties", label: "20代" },
     { value: "thirties", label: "30代" },
     { value: "forties", label: "40代" },
-    { value: "seniors", label: "50代以上" },
-    { value: "business", label: "ビジネス層" },
-    { value: "students", label: "学生" },
-    { value: "parents", label: "子育て世代" },
-    { value: "general", label: "一般ユーザー" }
+    { value: "fifties", label: "50代" },
+    { value: "seniors", label: "60代以上" }
   ];
 
   const postTypeOptions = [
     { value: "promotion", label: "商品・サービス宣伝" },
-    { value: "information", label: "情報共有" },
+    { value: "educational", label: "教育・啓発" },
     { value: "entertainment", label: "エンターテイメント" },
-    { value: "education", label: "教育・啓発" },
-    { value: "engagement", label: "エンゲージメント重視" },
     { value: "news", label: "ニュース・お知らせ" },
-    { value: "story", label: "ストーリー・体験談" }
+    { value: "lifestyle", label: "ライフスタイル" },
+    { value: "brand_awareness", label: "ブランド認知向上" }
   ];
 
   const frameworkOptions = [
@@ -144,46 +135,22 @@ export default function Home() {
       detail: "結論を先に述べ、理由と具体例で補強し、再度結論を示す"
     },
     { 
-      value: "bab", 
-      label: "BAB", 
-      description: "Before→After→Bridgeで変化を訴求", 
-      detail: "現在の状況、理想の未来、それを実現する橋渡し"
-    },
-    { 
-      value: "golden_circle", 
-      label: "ゴールデンサークル", 
-      description: "Why→How→Whatで本質から", 
-      detail: "なぜやるのか、どうやるのか、何をするのかの順で説明"
-    },
-    { 
-      value: "star", 
-      label: "STAR", 
-      description: "状況→課題→行動→結果で体験談", 
-      detail: "具体的な状況と課題、取った行動、得られた結果を示す"
-    },
-    { 
-      value: "fab", 
-      label: "FAB", 
-      description: "機能→利点→利益で価値訴求", 
-      detail: "機能を説明し、利点を示し、顧客にとっての利益を明確化"
-    },
-    { 
-      value: "storytelling", 
-      label: "ストーリーテリング", 
-      description: "起承転結で物語性を重視", 
-      detail: "導入→展開→転換→結論の流れで感情に訴える"
-    },
-    { 
       value: "quest", 
       label: "QUEST", 
-      description: "資格確認→理解→教育→刺激→移行", 
-      detail: "ターゲットを絞り、理解を深め、教育し、行動を刺激する"
+      description: "質問→理解→教育→刺激→移行", 
+      detail: "質問で関心を引き、理解を深め、教育し、行動を刺激する"
     },
     { 
       value: "scamper", 
       label: "SCAMPER", 
       description: "創造的な発想で差別化", 
       detail: "代用・結合・応用・修正・他用途・除去・逆転の視点で新しいアイデア"
+    },
+    { 
+      value: "storytelling", 
+      label: "ストーリーテリング", 
+      description: "起承転結で物語性を重視", 
+      detail: "導入→展開→転換→結論の流れで感情に訴える"
     }
   ];
 
@@ -191,9 +158,15 @@ export default function Home() {
     const platform = platformOptions.find(p => p.value === selectedPlatform);
     return platform ? platform.limit : null;
   };
-
   const handleFrameworkToggle = (frameworkValue: string) => {
-    setSelectedFrameworks([frameworkValue]);
+    setSelectedFrameworks(prev => {
+      // 既に選択されている場合は削除
+      if (prev.includes(frameworkValue)) {
+        return prev.filter(fw => fw !== frameworkValue);
+      }
+      // 選択されていない場合は追加（最大3つまで）
+      return prev.length < 3 ? [...prev, frameworkValue] : prev;
+    });
   };
 
   const handleMainAreaChange = async (areaName: string) => {
@@ -280,7 +253,10 @@ export default function Home() {
       console.error('収集エラー:', error);
       setCollectedList([]);
     } finally {
-      setIsCollecting(false);
+      setInterval(() => {
+        setIsCollecting(false);
+      }, 10000);
+     
     }
   };
 
@@ -318,7 +294,7 @@ export default function Home() {
     }
   };
 
-  // ファイルをダウンロード（getUrl方式）
+  // ファイルをダウンロード
   const downloadFileGetUrl = async (storageId: string, fileName: string) => {
     try {
       const response = await fetch('/api/files/download', {
@@ -350,7 +326,7 @@ export default function Home() {
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col p-8 min-h-screen overflow-hidden">
-      <h1 className="text-2xl font-bold mb-8">自動化ツールサンプル</h1>
+      <h1 className="text-2xl font-bold mb-8">自動化ツールデモサイト</h1>
       
       <Tabs defaultValue="generate" className="w-full">
         <div className="w-full overflow-x-auto">
@@ -365,7 +341,6 @@ export default function Home() {
               <span className="hidden sm:inline">営業リスト収集</span>
               <span className="sm:hidden">リスト収集</span>
             </TabsTrigger>
-          
             <TabsTrigger value="rag" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
               <Bot className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">RAGチャットボット</span>
@@ -375,20 +350,25 @@ export default function Home() {
         </div>
         
         <TabsContent value="generate" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wand2 className="h-5 w-5" />
-                SNS投稿生成ツール
-              </CardTitle>
-              <CardDescription>
-                プラットフォームに最適化されたSNS投稿を生成します
-              </CardDescription>
-            </CardHeader>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wand2 className="h-5 w-5" />
+                  SNS投稿生成ツール
+                </CardTitle>
+                <CardDescription>
+                  プラットフォームに最適化されたSNS投稿を生成します
+                </CardDescription>
+              </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
+                  <label className="text-xs md:text-sm font-medium flex items-center gap-2">
                     <Globe className="h-4 w-4" />
                     プラットフォーム
                   </label>
@@ -407,7 +387,7 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
+                  <label className="text-xs md:text-sm font-medium flex items-center gap-2">
                     <Users className="h-4 w-4" />
                     ターゲット層
                   </label>
@@ -426,7 +406,7 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
+                  <label className="text-xs md:text-sm font-medium flex items-center gap-2">
                     <Bot className="h-4 w-4" />
                     投稿タイプ
                   </label>
@@ -446,12 +426,26 @@ export default function Home() {
               </div>
 
               <div className="space-y-3">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <Brain className="h-4 w-4" />
-                  思考フレームワーク
-                  <Badge variant="outline" className="text-xs">
-                    {selectedFrameworks.length}個選択中
-                  </Badge>
+                <label className="text-sm font-semibold flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    <Brain className="h-4 w-4" />
+                    <p>思考フレームワーク</p>
+                  </div>
+                  {
+                    selectedFrameworks.length > 0 ? (
+                      <div className="flex items-center gap-2">
+                        {selectedFrameworks.map((framework) => (
+                          <Badge key={framework} className="text-xs uppercase" variant="default">
+                            {framework}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <Badge className="text-xs uppercase" variant="outline">
+                        {selectedFrameworks[0] ? selectedFrameworks[0] : "未選択"}
+                      </Badge>
+                    )
+                  }
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {frameworkOptions.map((framework) => (
@@ -511,11 +505,24 @@ export default function Home() {
                 />
               </div>
 
-              <Button 
-                onClick={handleGenerate} 
-                disabled={isGenerating || !prompt.trim()}
-                className="w-full"
+              {/* 最適化ガイド */}
+              <OptimizationGuide
+                platform={selectedPlatform}
+                targetAudience={targetAudience}
+                postType={postType}
+                onFrameworkSelect={(frameworks) => setSelectedFrameworks(frameworks)}
+                className="mt-4"
+              />
+
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
+                <Button 
+                  onClick={handleGenerate} 
+                  disabled={isGenerating || !prompt.trim()}
+                  className="w-full"
+                >
                 {isGenerating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -528,57 +535,196 @@ export default function Home() {
                   </>
                 )}
               </Button>
+              </motion.div>
             </CardContent>
           </Card>
+          </motion.div>
+          <TaskProgress taskType="sns_generation" />
               
-          {snsPosts && snsPosts.length > 0 && snsPosts.map((post) => (
-            <div key={post._id} className="mb-4 border-b pb-4">
-              <CardHeader className="p-0">
-                <CardTitle className="text-lg flex items-center justify-between">
-                  生成結果
-                  {selectedPlatform && (
-                    <Badge variant="outline">
-                      {post.result.length}/{getCharacterLimit()}文字
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <div>
-                <div className="text-xs text-muted-foreground whitespace-pre-wrap bg-muted p-2 md:p-4 rounded-lg">{post.result.slice(0, 100)}...</div>
-                <div className="flex justify-end mt-4">
-                <Button onClick={() => {
-                  setIsOpen(true)
-                  setSelectedPost(post)
-                }}>詳細を見る</Button>
-                </div>
-              </div>
-            </div>
+          <AnimatePresence>
+            {snsPosts && snsPosts.length > 0 && snsPosts.map((post) => (
+            <motion.div 
+              key={post._id} 
+              className="mb-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    生成結果
+                    <div className="flex items-center gap-2">
+                      {post.platform && (
+                        <Badge variant="secondary" className="text-xs">
+                          {post.platform}
+                        </Badge>
+                      )}
+                      {post.platform && (
+                        <Badge variant="outline" className="text-xs">
+                          {post.result.length}/{
+                            platformOptions.find(p => p.value === post.platform)?.limit || '?'
+                          }文字
+                        </Badge>
+                      )}
+                    </div>
+                  </CardTitle>
+                  
+                  {/* 生成パラメータ表示 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    {post.targetAudience && (
+                      <div className="flex items-center gap-1">
+                        <Users className="h-3 w-3 text-gray-500" />
+                        <span className="text-gray-600">ターゲット:</span>
+                        <span className="font-medium">
+                          {targetAudienceOptions.find(opt => opt.value === post.targetAudience)?.label || post.targetAudience}
+                        </span>
+                      </div>
+                    )}
+                    {post.postType && (
+                      <div className="flex items-center gap-1">
+                        <Bot className="h-3 w-3 text-gray-500" />
+                        <span className="text-gray-600">投稿タイプ:</span>
+                        <span className="font-medium">
+                          {postTypeOptions.find(opt => opt.value === post.postType)?.label || post.postType}
+                        </span>
+                      </div>
+                    )}
+                    {post.frameworks && post.frameworks.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Brain className="h-3 w-3 text-gray-500" />
+                        <span className="text-gray-600">フレームワーク:</span>
+                        <span className="font-medium">
+                          {post.frameworks.map(fw => 
+                            frameworkOptions.find(opt => opt.value === fw)?.label || fw
+                          ).join(", ")}
+                        </span>
+                      </div>
+                    )}
+                    {post.keywords && (
+                      <div className="flex items-center gap-1">
+                        <Hash className="h-3 w-3 text-gray-500" />
+                        <span className="text-gray-600">キーワード:</span>
+                        <span className="font-medium text-blue-600">
+                          {post.keywords}
+                        </span>
+                      </div>
+                    )}
+                    {post.createdAt && (
+                      <div className="flex items-center gap-1 md:col-span-2">
+                        <Clock className="h-3 w-3 text-gray-500" />
+                        <span className="text-gray-600">生成日時:</span>
+                        <span className="font-medium">
+                          {new Date(post.createdAt).toLocaleString('ja-JP')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="pt-0">
+                  <div className="text-xs text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-lg mb-4">
+                    {post.result.slice(0, 150)}...
+                  </div>
+                  <div className="flex justify-end">
+                    <Button onClick={() => {
+                      setIsOpen(true)
+                      setSelectedPost(post)
+                    }}>詳細を見る</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
+          </AnimatePresence>
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
                   <DialogContent className="max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
-                      <DialogTitle>生成結果</DialogTitle>
+                      <DialogTitle className="flex items-center gap-2">
+                        生成結果詳細
+                        {selectedPost?.platform && (
+                          <Badge variant="secondary">{selectedPost.platform}</Badge>
+                        )}
+                      </DialogTitle>
+                      
+                      {/* 生成パラメータ詳細 */}
+                      {selectedPost && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-gray-50 rounded-lg text-sm">
+                          {selectedPost.platform && (
+                            <div>
+                              <span className="font-medium text-gray-600">プラットフォーム:</span>
+                              <div className="mt-1">
+                                {platformOptions.find(opt => opt.value === selectedPost.platform)?.label || selectedPost.platform}
+                              </div>
+                            </div>
+                          )}
+                          {selectedPost.targetAudience && (
+                            <div>
+                              <span className="font-medium text-gray-600">ターゲット層:</span>
+                              <div className="mt-1">
+                                {targetAudienceOptions.find(opt => opt.value === selectedPost.targetAudience)?.label || selectedPost.targetAudience}
+                              </div>
+                            </div>
+                          )}
+                          {selectedPost.postType && (
+                            <div>
+                              <span className="font-medium text-gray-600">投稿タイプ:</span>
+                              <div className="mt-1">
+                                {postTypeOptions.find(opt => opt.value === selectedPost.postType)?.label || selectedPost.postType}
+                              </div>
+                            </div>
+                          )}
+                          {selectedPost.frameworks && selectedPost.frameworks.length > 0 && (
+                            <div>
+                              <span className="font-medium text-gray-600">フレームワーク:</span>
+                              <div className="mt-1">
+                                {selectedPost.frameworks.map(fw => 
+                                  frameworkOptions.find(opt => opt.value === fw)?.label || fw
+                                ).join(", ")}
+                              </div>
+                            </div>
+                          )}
+                          {selectedPost.keywords && (
+                            <div className="md:col-span-2">
+                              <span className="font-medium text-gray-600">キーワード:</span>
+                              <div className="mt-1 text-blue-600">
+                                {selectedPost.keywords}
+                              </div>
+                            </div>
+                          )}
+                          {selectedPost.createdAt && (
+                            <div className="md:col-span-2">
+                              <span className="font-medium text-gray-600">生成日時:</span>
+                              <div className="mt-1">
+                                {new Date(selectedPost.createdAt).toLocaleString('ja-JP')}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
                       <div className="flex items-center gap-2">
                         <Switch checked={showJson} onCheckedChange={setShowJson} />
                         <span className="text-sm">JSON表示</span>
                       </div>
                     </DialogHeader>
-                    {
-                      showJson ? (
-                        <DialogDescription className="whitespace-pre-wrap">
-                          {selectedPost?.contextJson}
-                        </DialogDescription>
-                      ) : (
-                        <DialogDescription className="whitespace-pre-wrap">
-                          {selectedPost?.result}
-                        </DialogDescription>
-                      )
-                    }
                     
-                    <DialogFooter>
+                    <div className="mt-4">
+                      {showJson ? (
+                        <div className="whitespace-pre-wrap bg-gray-100 p-4 rounded-lg text-sm font-mono">
+                          {selectedPost?.contextJson}
+                        </div>
+                      ) : (
+                        <div className="whitespace-pre-wrap bg-white border p-4 rounded-lg">
+                          {selectedPost?.result}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <DialogFooter className="mt-4">
                       <Button 
                         variant="outline" 
-                        
                         onClick={() => navigator.clipboard.writeText(showJson ? selectedPost?.contextJson || "" : selectedPost?.result || "")}
                       >
                         コピー
@@ -603,25 +749,30 @@ export default function Home() {
         </TabsContent>
         
         <TabsContent value="collect" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                営業リスト収集ツール
-              </CardTitle>
-              <CardDescription>
-                ホットペッパーから営業先のリストを自動収集します
-              </CardDescription>
-            </CardHeader>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  営業リスト収集ツール
+                </CardTitle>
+                <CardDescription>
+                  ホットペッパーから営業先のリストを自動収集します
+                </CardDescription>
+              </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-4">
-                <label className="text-sm font-medium">
+                <label className="text-sm font-semibold">
                   ホットペッパーエリア選択
                 </label>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex flex-wrap gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-gray-600">
+                    <label className="text-xs  text-gray-600">
                       都道府県・地域
                     </label>
                     <Select value={selectedMainArea} onValueChange={handleMainAreaChange}>
@@ -710,12 +861,12 @@ export default function Home() {
                 )}
                 
               </div>
-              
-              <Button 
-                onClick={handleCollectList}
-                disabled={!selectedMainArea || isCollecting}
-                className="w-full sm:w-auto"
-              >
+
+                <Button 
+                  onClick={handleCollectList}
+                  disabled={!selectedMainArea || isCollecting}
+                  className="w-full sm:w-auto"
+                >
                 {isCollecting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -728,11 +879,22 @@ export default function Home() {
                   </>
                 )}
               </Button>
+              
             </CardContent>
           </Card>
+          </motion.div>
 
-          {collectedList.length > 0 && (
-            <Card>
+          <TaskProgress taskType="scraping" />
+
+          <AnimatePresence>
+            {collectedList.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   収集結果 ({collectedList.length}件)
@@ -762,7 +924,9 @@ export default function Home() {
                 </div>
               </CardContent>
             </Card>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

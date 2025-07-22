@@ -18,6 +18,8 @@ import type * as generate_mutation from "../generate/mutation.js";
 import type * as generate_query from "../generate/query.js";
 import type * as http from "../http.js";
 import type * as scraping from "../scraping.js";
+import type * as task_mutation from "../task/mutation.js";
+import type * as task_query from "../task/query.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -33,6 +35,8 @@ declare const fullApi: ApiFromModules<{
   "generate/query": typeof generate_query;
   http: typeof http;
   scraping: typeof scraping;
+  "task/mutation": typeof task_mutation;
+  "task/query": typeof task_query;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

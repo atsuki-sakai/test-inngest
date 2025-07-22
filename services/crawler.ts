@@ -290,6 +290,7 @@ export async function getAllSalons(baseUrl: string): Promise<Array<{name: string
 
         while (true) {
             console.log(`🔍 ページ ${page} を処理中...`);
+            await sleep(DELAY_MS);
 
             if (visited.has(currentUrl)) {
                 console.warn('⚠️  同じURLを再訪しそうなのでループを終了します');

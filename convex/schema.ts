@@ -10,7 +10,14 @@ export default defineSchema({
         query: v.string(), // ユーザーの入力
         result: v.string(), // 生成結果
         time: v.number(), // 生成にかかった時間
-        contextJson: v.string(), // 生成途中の結果
+        contextJson: v.optional(v.string()), // 生成途中の結果
+        // 生成パラメータ
+        platform: v.optional(v.string()), // プラットフォーム
+        targetAudience: v.optional(v.string()), // ターゲット層
+        postType: v.optional(v.string()), // 投稿タイプ
+        keywords: v.optional(v.string()), // キーワード
+        frameworks: v.optional(v.array(v.string())), // 使用したフレームワーク
+        createdAt: v.optional(v.number()), // 作成日時
     })
     .index("by_event_id", ["eventId"]),
     
@@ -22,6 +29,7 @@ export default defineSchema({
         metadata: v.optional(v.object({
             eventId: v.string(),
             areaUrl: v.string(),
+            areaName: v.string(),
             recordCount: v.number(),
             duration: v.number(),
             scrapedAt: v.string()
@@ -47,7 +55,8 @@ export default defineSchema({
             staffCount: v.optional(v.string()),
             features: v.optional(v.string()),
             remarks: v.optional(v.string()),
-            other: v.optional(v.string())
+            other: v.optional(v.string()),
+            queries: v.optional(v.array(v.string()))
         })),
         duration: v.number(),
         totalCount: v.number(),
@@ -60,5 +69,31 @@ export default defineSchema({
     })
     .index("by_event_id", ["eventId"])
     .index("by_area_url", ["areaUrl"]),
+    
+    task: defineTable({
+        eventId: v.string(),
+        taskType: v.union(v.literal("sns_generation"), v.literal("scraping")),
+        status: v.union(v.literal("pending"), v.literal("in_progress"), v.literal("completed"), v.literal("failed")),
+        currentStep: v.number(),
+        totalSteps: v.number(),
+        stepDetails: v.array(v.object({
+            stepId: v.string(),
+            name: v.string(),
+            status: v.union(v.literal("pending"), v.literal("in_progress"), v.literal("completed"), v.literal("failed")),
+            startTime: v.optional(v.number()),
+            endTime: v.optional(v.number()),
+            error: v.optional(v.string())
+        })),
+        metadata: v.optional(v.object({
+            platform: v.optional(v.string()),
+            areaUrl: v.optional(v.string()),
+            areaName: v.optional(v.string()),
+            prompt: v.optional(v.string())
+        })),
+        createdAt: v.number()
+    })
+    .index("by_event_id", ["eventId"])
+    .index("by_status", ["status"])
+    .index("by_task_type", ["taskType"]),
 });
 

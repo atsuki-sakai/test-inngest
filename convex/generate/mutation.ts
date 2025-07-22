@@ -9,6 +9,12 @@ export const create = mutation({
         result: v.string(),
         time: v.number(),
         contextJson: v.string(),
+        // 生成パラメータ
+        platform: v.optional(v.string()),
+        targetAudience: v.optional(v.string()),
+        postType: v.optional(v.string()),
+        keywords: v.optional(v.string()),
+        frameworks: v.optional(v.array(v.string())),
     },
     handler: async (ctx, args) => {
         await ctx.db.insert("generate", {
@@ -18,6 +24,12 @@ export const create = mutation({
             result: args.result,
             time: args.time,
             contextJson: args.contextJson,
+            platform: args.platform,
+            targetAudience: args.targetAudience,
+            postType: args.postType,
+            keywords: args.keywords,
+            frameworks: args.frameworks,
+            createdAt: Date.now(),
         });
     },
 });
