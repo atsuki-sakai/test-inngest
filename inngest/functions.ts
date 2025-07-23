@@ -614,7 +614,7 @@ export const scrapeHotPepper = inngest.createFunction(
           { stepId: "collect-instagram", name: "Instagram情報収集" },
           { stepId: "calculate-duration", name: "処理時間記録" },
           { stepId: "generate-and-upload-csv", name: "CSV生成・アップロード" },
-          { stepId: "save-to-convex", name: "Convex保存" }
+          { stepId: "save-to-convex", name: "ストレージに保存" }
         ],
         metadata: {
           areaUrl,
