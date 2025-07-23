@@ -1,32 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LogoutButton() {
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
   const handleLogout = async () => {
     setIsLoading(true);
     
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
+      await signOut({
+        callbackUrl: '/login',
+        redirect: true
       });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        toast.success("ログアウトしました");
-        router.push('/login');
-        router.refresh();
-      } else {
-        toast.error("ログアウトに失敗しました");
-      }
+      toast.success("ログアウトしました");
     } catch (error) {
       console.error('Logout error:', error);
       toast.error("ログアウトに失敗しました");

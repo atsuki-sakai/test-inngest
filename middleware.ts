@@ -1,50 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { verifySessionToken } from '@/lib/auth';
+import { withAuth } from "next-auth/middleware"
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // ログインページとAPIルートは認証をスキップ
-  if (
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/favicon.ico') ||
-    pathname.includes('.')
-  ) {
-    return NextResponse.next();
+export default withAuth(
+  function middleware() {
+    // 追加の認証ロジックが必要な場合はここに記述
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token
+    },
   }
-
-  // セッショントークンを取得
-  const sessionToken = request.cookies.get('session')?.value;
-
-  if (!sessionToken) {
-    // セッションがない場合はログインページにリダイレクト
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  try {
-    // セッショントークンを検証
-    const sessionData = await verifySessionToken(sessionToken);
-
-    if (!sessionData || !sessionData.authenticated) {
-      // セッションが無効な場合はログインページにリダイレクト
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      response.cookies.delete('session');
-      return response;
-    }
-
-    // セッションが有効な場合は続行
-    return NextResponse.next();
-
-  } catch (error) {
-    console.error('Middleware auth error:', error);
-    // エラーが発生した場合はログインページにリダイレクト
-    const response = NextResponse.redirect(new URL('/login', request.url));
-    response.cookies.delete('session');
-    return response;
-  }
-}
+)
 
 export const config = {
   matcher: [
@@ -58,4 +23,4 @@ export const config = {
      */
     '/((?!api/auth|_next/static|_next/image|favicon.ico|login).*)',
   ],
-};
+}
