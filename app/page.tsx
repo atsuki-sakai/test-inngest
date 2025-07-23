@@ -656,7 +656,7 @@ export default function Home() {
                       
                       {/* 生成パラメータ詳細 */}
                       {selectedPost && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-gray-50 rounded-lg text-sm">
+                        <div className="grid grid-cols-2 overflow-hidden justify-items-start gap-3 p-4 bg-gray-50 rounded-lg text-sm">
                           {selectedPost.platform && (
                             <div>
                               <span className="font-medium text-gray-600">プラットフォーム:</span>
