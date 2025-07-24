@@ -1,15 +1,11 @@
 import { withAuth } from "next-auth/middleware"
 
-export default withAuth(
-  function middleware() {
-    // 追加の認証ロジックが必要な場合はここに記述
+export default withAuth({
+  callbacks: {
+    authorized: ({ token }) =>
+      process.env.NODE_ENV === "development" || !!token,
   },
-  {
-    callbacks: {
-      authorized: ({ token }) => !!token
-    },
-  }
-)
+});
 
 export const config = {
   matcher: [

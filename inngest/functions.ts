@@ -3,7 +3,6 @@ import OpenAI from "openai";
 import { api } from "@/convex/_generated/api";
 import { fetchMutation } from "convex/nextjs";
 import { AREA_URL_MAP } from "@/lib/constants";
-import { time } from "console";
 
 // エリアURLからエリア名を取得するヘルパー関数
 const getAreaNameFromUrl = (areaUrl: string): string => {
@@ -89,13 +88,13 @@ ${data.query ? `===カスタム要求===\n${data.query}\n` : ''}
 「〜」（想定される感想を1つ）`;
 };
 
-const apiKey = process.env.DEEPSEEK_API_KEY;
+const apiKey = process.env.OPEN_ROUTER_API_KEY;
 if (!apiKey) {
-  throw new Error("DEEPSEEK_API_KEY is not set");
+  throw new Error("OPEN_ROUTER_API_KEY is not set");
 }
 
 const openai = new OpenAI({
-  baseURL: 'https://api.deepseek.com',
+  baseURL: 'https://openrouter.ai/api/v1',
   apiKey: apiKey
 });
 
@@ -120,7 +119,7 @@ export const generate = inngest.createFunction(
 
     const completion = await openai.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
-      model: "deepseek-chat",
+      model: "deepseek/deepseek-chat-v3-0324:free",
     });
     const elapsedTime = performance.now() - startTime;
     const elapsedTimeInSeconds = Math.round(elapsedTime / 100) / 10; // ミリ秒を秒に変換し、小数点以下1桁で四捨五入
@@ -140,7 +139,7 @@ export const generate = inngest.createFunction(
           platform: event.data.platform,
         }),
         response: completion.choices[0].message.content || "",
-        model: "deepseek-chat"
+        model: "deepseek/deepseek-chat-v3-0324:free"
       }),
     });
     return { message: completion.choices[0].message.content };
@@ -314,7 +313,7 @@ export const generateSNSPost = inngest.createFunction(
 
       const completion = await openai.chat.completions.create({
         messages: [{ role: "user", content: platformPrompt }],
-        model: "deepseek-chat",
+        model: "deepseek/deepseek-chat-v3-0324:free",
       });
 
 
@@ -358,7 +357,7 @@ ${platformOptimized}
 
         const completion = await openai.chat.completions.create({
           messages: [{ role: "user", content: creativePrompt }],
-          model: "deepseek-chat",
+          model: "deepseek/deepseek-chat-v3-0324:free",
         });
 
 
@@ -409,7 +408,7 @@ ${contentEnhanced}
 
         const completion = await openai.chat.completions.create({
           messages: [{ role: "user", content: marketingPrompt }],
-          model: "deepseek-chat",
+          model: "deepseek/deepseek-chat-v3-0324:free",
         });
 
               // ステップ3完了を記録
@@ -471,7 +470,7 @@ ${marketingEvaluated}
 
         const completion = await openai.chat.completions.create({
           messages: [{ role: "user", content: qaPrompt }],
-          model: "deepseek-chat",
+          model: "deepseek/deepseek-chat-v3-0324:free",
         });
 
 
@@ -524,7 +523,7 @@ ${marketingEvaluated}
 
         const completion = await openai.chat.completions.create({
           messages: [{ role: "user", content: consensusPrompt }],
-          model: "deepseek-chat",
+          model: "deepseek/deepseek-chat-v3-0324:free",
         });
 
 

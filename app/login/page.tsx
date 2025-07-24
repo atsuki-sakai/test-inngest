@@ -12,12 +12,14 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // セッションがあるかチェックして、ログイン済みならリダイレクト
-    getSession().then((session) => {
-      if (session) {
-        router.push('/');
-      }
-    });
+    if (process.env.NODE_ENV !== 'development') {
+      // セッションがあるかチェックして、ログイン済みならリダイレクト
+      getSession().then((session) => {
+        if (session) {
+          router.push('/');
+        }
+      });
+    }
   }, [router]);
 
   const handleGoogleSignIn = async () => {
