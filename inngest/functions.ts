@@ -883,7 +883,7 @@ export const scrapeHotPepper = inngest.createFunction(
           // ファイルをアップロード
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
           const areaName = getAreaNameFromUrl(areaUrl);
-          const fileName = `${timestamp.split('T')[0]}-hotpepper-${areaName}.csv`;
+          const fileName = `${timestamp.split('T')[0]}-target-${areaName}.csv`;
           
           // Convex公式推奨：BlobまたはFileを直接bodyに指定
           const csvFile = new File([csvBlob], fileName, { 

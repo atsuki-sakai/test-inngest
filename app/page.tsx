@@ -351,11 +351,7 @@ export default function Home() {
               <span className="hidden sm:inline">営業リスト収集</span>
               <span className="sm:hidden">リスト収集</span>
             </TabsTrigger>
-            <TabsTrigger value="rag" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
-              <Bot className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">RAGチャットボット</span>
-              <span className="sm:hidden">チャット</span>
-            </TabsTrigger>
+           
           </TabsList>
         </div>
         
@@ -767,13 +763,13 @@ export default function Home() {
                   営業リスト収集ツール
                 </CardTitle>
                 <CardDescription>
-                  ホットペッパーから営業先のリストを自動収集します
+                  営業先のリストを自動収集します
                 </CardDescription>
               </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-4">
                 <label className="text-sm font-semibold">
-                  ホットペッパーエリア選択
+                  エリア選択
                 </label>
                 
                 <div className="flex flex-wrap gap-4">
@@ -1005,37 +1001,6 @@ export default function Home() {
             </CardContent>
           </Card>
         </TabsContent>
-
-
-        <TabsContent value="rag" className="space-y-6 mt-6">
-        <div className="relative iframe-container">
-                {!isIframeLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-50 rounded-lg border" style={{minHeight: "700px"}}>
-                    <div className="flex flex-col items-center gap-4">
-                      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                      <p className="text-gray-500">チャットボットを読み込み中...</p>
-                    </div>
-                  </div>
-                )}
-                <iframe
-                  src="https://udify.app/chatbot/GlZ3tnzKc5WvGufT"
-                  style={{
-                    width: "100%", 
-                    height: "100%", 
-                    minHeight: "700px",
-                    border: "none",
-                    borderRadius: "1rem"
-                  }}
-                  allow="microphone"
-                  onLoad={() => setIsIframeLoaded(true)}>
-                </iframe>
-                {/* Overlay to hide branding */}
-                <div 
-                  className="absolute bottom-0 left-0 right-0 bg-white pointer-events-none"
-                  style={{ height: "60px", borderBottomLeftRadius: "0.5rem", borderBottomRightRadius: "0.5rem" }}
-                />
-              </div>
-         </TabsContent>
       </Tabs>
     </div>
   );
